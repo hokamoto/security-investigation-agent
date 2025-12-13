@@ -265,8 +265,6 @@ payloads, and confirms that the IP also sent non-attack requests. No additional 
 clarification is required.
 ```
 
----
-
 ## Disclaimer and Legal Notices
 
 This is an independent, unofficial, third-party tool.
