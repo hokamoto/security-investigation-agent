@@ -31,20 +31,20 @@ Akamai WAF logs appear simple, but without explicit security semantics, LLMs pro
 
 Without explicit domain knowledge, even large LLMs fail at security log analysis, generating syntactically correct SQL that produces analytically wrong answers. This agent addresses this through structured prompts that encode domain rules: which fields mean what in security context, how detection mechanisms differ (payload-based vs. reputation-based), etc. No model fine-tuning is needed, but without rigorous prompt engineering, small LLMs cannot perform complex analysis, and even large LLMs produce confident nonsense.
 
-**Calculator Tool for Arithmetic Prevents LLM Math Errors**
-LLMs struggle with arithmetic (e.g., calculating percentage increases or rate comparisons) because they are token prediction models that learn numerical patterns from training data rather than executing symbolic computation rules. This agent externalizes all math to a `calculator` tool: when synthesis requires computing "211 / 712 * 100", the LLM invokes `calculator(expression="211 / 712 * 100", decimal_places=1)` and receives "29.6" as a verified result. The LLM never performs mental math; it only decides which calculations are needed.
+**Iterative Investigation Instead of One-Shot Generation**
+Traditional text-to-SQL systems fail on complex security questions because they must predict all necessary queries upfront. This agent uses an incremental planning architecture: it starts with simple baseline queries (e.g., "get top attacking IPs"), synthesizes results to identify anomalies, then generates targeted follow-up queries using discovered values (e.g., "analyze all requests from 203.0.113.5"). 
 
 **Adaptive Query Rewriting Prevents Context Overflow**
 Security investigations often generate massive result sets (tens of thousands of rows), but naive approaches either truncate data (losing critical patterns) or exceed LLM context windows. This agent detects result overflow automatically before retrieving all data, then delegates statistical rewriting to the LLM itself. The LLM transforms the original query into 1-3 targeted summary queries, preserving equivalent analytical insight while fitting comfortably in context.
 
-**Iterative Investigation Instead of One-Shot Generation**
-Traditional text-to-SQL systems fail on complex security questions because they must predict all necessary queries upfront. This agent uses an incremental planning architecture: it starts with simple baseline queries (e.g., "get top attacking IPs"), synthesizes results to identify anomalies, then generates targeted follow-up queries using discovered values (e.g., "analyze all requests from 203.0.113.5"). 
-
-**LLM-as-a-Judge for Regression Testing**
-This agent validates analysis quality through LLM-as-a-Judge evaluation rather than traditional heuristics. When prompts or workflow logic change, automated tests execute the agent against pre-defined questions with known answers, then an LLM grader compares the agent's response to expected results and grading criteria.
+**Calculator Tool for Arithmetic Prevents LLM Math Errors**
+LLMs struggle with arithmetic (e.g., calculating percentage increases or rate comparisons) because they are token prediction models that learn numerical patterns from training data rather than executing symbolic computation rules. This agent externalizes all math to a `calculator` tool: when synthesis requires computing "211 / 712 * 100", the LLM invokes `calculator(expression="211 / 712 * 100", decimal_places=1)` and receives "29.6" as a verified result. The LLM never performs mental math; it only decides which calculations are needed.
 
 **<num> Tags Prevent Numeric Hallucination**
 LLMs may fabricate or misremember numbers from query results. This agent requires that all numeric claims use <num> tags that explicitly cite the data source and value, making hallucinated numbers detectable.
+
+**LLM-as-a-Judge for Regression Testing**
+During development, this agent's analysis quality is validated through LLM-as-a-Judge evaluation for regression testing rather than traditional heuristics. When prompts or workflow logic change, automated tests execute the agent against pre-defined questions with known answers, then an LLM grader compares the agent's response to expected results and grading criteria.
 
 ## Agent Workflow
 
