@@ -1,0 +1,10 @@
+name: waf_path_temporal_pattern_analysis
+question: "For akamai.fab34.com between 2025-12-03T00:00:00Z and 2025-12-08T00:00:00Z, identify the path that received the highest number of attack attempts. Then analyze the hourly distribution of attacks against this path to identify peak attack times."
+expected_answer: "The most attacked path is '/' with 43 attack attempts. Hourly peak times for this path include: 2025-12-06 01:00 (7 attacks), 2025-12-03 03:00 (5 attacks), 2025-12-04 14:00 (5 attacks), and 2025-12-07 14:00 (5 attacks), with other hours showing fewer events. The attacks are distributed across different times of day rather than concentrated in a single window, suggesting multiple attack sources or ongoing reconnaissance activity."
+expected_methods:
+  - "MUST use 2-round planning: Round 1 identifies most attacked path, Round 2 performs hourly aggregation for that path"
+  - "Round 1 MUST use GROUP BY path with ORDER BY count() DESC"
+  - "Round 2 MUST use WHERE path = '<discovered_path>' and GROUP BY toStartOfHour(timestamp)"
+  - "Should use time bucketing function like toStartOfHour() for temporal aggregation"
+  - "Should ORDER BY count DESC in Round 2 to identify peak hours"
+  - "Demonstrates temporal analysis requiring specific path from discovery phase"

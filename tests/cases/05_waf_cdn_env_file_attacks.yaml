@@ -1,0 +1,8 @@
+name: waf_cdn_env_file_attacks
+question: "For akamai.fab34.com between 2025-12-03T00:00:00Z and 2025-12-08T00:00:00Z, analyze attacks targeting the /.env file. How many were detected by WAF and how many resulted in 403 responses at the CDN?"
+expected_answer: "Attacks targeting /.env file: WAF detected 12 security events for '/.env' during the period, and the CDN recorded 10 HTTP 403 responses for '/.env'. This close correlation indicates most WAF-detected .env attacks resulted in CDN 403 blocks."
+expected_methods:
+  - "Must query both WAF logs (WHERE path = '/.env') and CDN logs (WHERE reqPath = '/.env')"
+  - "Should use COUNT for WAF events and COUNT with statusCode = 403 filter for CDN"
+  - "Should be answerable in 1 round with 2 queries"
+  - "Demonstrates path-specific correlation between WAF and CDN logs"

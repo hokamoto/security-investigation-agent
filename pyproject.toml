@@ -1,0 +1,18 @@
+[project]
+name = "siem-agent"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "langgraph>=1.0.2",
+    "langgraph-checkpoint-sqlite>=3.0.0",
+    "langchain>=1.0.3",
+    "langchain-openai>=1.0.1",
+    "pydantic>=2.12.3",
+    "clickhouse-connect",
+    "pyyaml",
+]
+
+[dependency-groups]
+dev = [
+    "vulture>=2.14",
+]

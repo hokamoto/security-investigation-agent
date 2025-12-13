@@ -1,0 +1,10 @@
+name: waf_top_attacker_detailed_analysis
+question: "For akamai.fab34.com between 2025-12-03T00:00:00Z and 2025-12-08T00:00:00Z, identify the IP address with the most WAF security events. Then provide a detailed breakdown of what specific paths and attack types this IP targeted."
+expected_answer: "The top attacking IP is 4.190.185.37 with 219 WAF security events. Attack type breakdown: 189 DoS attacks (86.3%) and 30 Bot attacks (13.7%). This IP targeted numerous suspicious PHP files."
+expected_methods:
+  - "MUST use 2-round planning: Round 1 identifies the top IP, Round 2 queries details for that specific IP"
+  - "Round 1 query MUST NOT contain placeholder like 'TOP_IP' - it should discover the actual IP value"
+  - "Round 2 query MUST use the discovered IP value in WHERE clause (e.g., WHERE clientIP = '<discovered_value>')"
+  - "Should use ARRAY JOIN attackTypes to get attack type breakdown"
+  - "Should use GROUP BY path to analyze targeted paths"
+  - "Demonstrates 'Find X then detail' pattern where Round 2 cannot be written without Round 1 results"

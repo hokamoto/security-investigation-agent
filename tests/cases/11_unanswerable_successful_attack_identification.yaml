@@ -1,0 +1,14 @@
+name: unanswerable_successful_attack_identification
+question: "For akamai.fab34.com between 2025-12-03T00:00:00Z and 2025-12-08T00:00:00Z, identify which of the Bot attacks detected by WAF in 'monitor' mode (not blocked) actually succeeded in compromising the server or achieving their malicious objective. Provide a list of successful attacks with evidence of compromise."
+expected_answer: "This question cannot be answered with the available WAF and CDN logs, despite appearing to have sufficient data. While we can observe that 273 attacks were detected in monitor mode (not blocked), and we can correlate these with CDN responses (including 100 requests that received 200 OK status), these logs cannot determine whether an attack 'succeeded in compromising the server.' Here's why: (1) HTTP 200 status only means content was delivered successfully, not that malicious operations succeeded. A properly secured application can return 200 while safely rejecting malicious input. (2) HTTP 404 status doesn't prove attack failure—the attacker may have been probing for vulnerabilities. (3) Determining 'compromise success' requires application-level evidence: database modifications, file system changes, command execution logs, memory dumps, or application security logs. (4) WAF and CDN logs show network-layer and delivery-layer activity, but are blind to application-layer outcomes. For example, path '/' received 42 monitor-mode Bot attacks and CDN delivered 39 successful 200 responses, but this correlation doesn't indicate whether any malicious objective was achieved. To answer this question would require integration with intrusion detection systems, application logs, database audit logs, and file integrity monitoring."
+expected_methods:
+  - "Must correctly identify that this question is unanswerable despite having relevant data"
+  - "Should set is_answerable=False in the investigation plan"
+  - "MAY initially explore the data (monitor mode counts, CDN 200 responses) before recognizing the logical impossibility"
+  - "Should explain that HTTP status codes do not indicate attack success or failure at application layer"
+  - "Should distinguish between 'request delivered' (observable) vs 'malicious objective achieved' (not observable)"
+  - "Should recognize that correlation between WAF detections and CDN responses is insufficient to determine compromise"
+  - "Should explain what additional data sources would be needed: application logs, IDS/IPS, database audit logs, file integrity monitoring"
+  - "Should NOT claim that 200 status = attack success or 404 status = attack failure"
+  - "Should NOT infer compromise from available data without proper evidence"
+  - "Demonstrates understanding that 'answerable with available data' requires logical sufficiency, not just data presence"

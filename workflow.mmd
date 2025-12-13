@@ -1,0 +1,25 @@
+%% Workflow of the SIEM agent multi-node investigation with re-planning
+flowchart TD
+    A[Start<br>Security question received] --> B[Plan initial investigation<br>LLM drafts 1-5 SQL queries]
+    B -->|Question cannot be answered with available data| Z1[End<br>Explain missing data]
+    B -->|Plan ready| C[Run a query<br>validate and auto-fix SQL]
+    C -->|Too many rows| C1[LLM rewrites as<br>statistical summaries: 1-3 queries]
+    C1 --> C2[Run summary queries<br>overview + patterns + samples]
+    C2 --> D[Save results for analysis]
+    C -->|Query finished, errors captured| D
+    D -->|More queries in this plan| C
+    D -->|All queries done| E[LLM analyzes all results<br>drafts answer + confidence]
+    E --> F{Should we investigate further?}
+    F -->|Enough evidence or max rounds reached| Z2[End<br>Share final answer + gaps]
+    F -->|Dig deeper using findings| G[LLM creates follow-up queries<br>uses values seen in results]
+    G --> C
+
+    %% Notes
+    classDef terminal fill:#f9f0f0,stroke:#cc3333,stroke-width:1.5px
+    classDef decision fill:#e6f3ff,stroke:#0066cc,stroke-width:2px
+    classDef replan fill:#fff4e6,stroke:#ff9900,stroke-width:2px
+    classDef summary fill:#e6ffe6,stroke:#00cc66,stroke-width:2px
+    class Z1,Z2 terminal
+    class F decision
+    class G replan
+    class C1,C2 summary

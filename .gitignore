@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv
+
+# uv
+.uv/
+
+# Claude
+.claude/
+.mcp.json
+
+# Log
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# MacOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Configuration (may contain sensitive credentials)
+config.yaml
+
+# Test artifatcs
+tests/artifacts/

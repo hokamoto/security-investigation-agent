@@ -1,0 +1,28 @@
+# SIEM Agent Configuration
+
+# ClickHouse Connection
+clickhouse:
+  host: "your-clickhouse-host.com"
+  port: 8123
+  database: "default"
+  user: "default"
+  password: ""
+  siem_log_table_name: "siem"
+  cdn_log_table_name: "logs"
+  max_result_rows: 300  # Maximum rows per query (triggers exception if exceeded)
+
+# vLLM Configuration
+vllm:
+  base_url: "http://localhost:8000"
+  model: "openai/gpt-oss-20b"
+  api_key: "EMPTY"    # API key for OpenAI API (use "EMPTY" for local vLLM)
+  timeout: 300        # Request timeout in seconds
+  temperature: 0.2    # LLM creativity (0.0-1.0)
+  top_p: 1.0          # Nucleus sampling threshold
+  max_tokens: 40000   # Maximum tokens in LLM response (safe limit for max_model_len 82000)
+  reasoning_effort: "medium"
+
+# Agent Behavior
+agent:
+  max_iterations: 10
+  max_replanning_rounds: 3  # Maximum number of re-planning iterations (each round can generate 1-10 new queries)

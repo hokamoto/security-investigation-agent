@@ -1,0 +1,10 @@
+name: waf_most_attacked_path_analysis
+question: "For akamai.fab34.com between 2025-12-03T00:00:00Z and 2025-12-08T00:00:00Z, which path received the most WAF security events? Provide detailed information about the attackers targeting this path, including their IP addresses, countries, and attack types."
+expected_answer: "The most attacked path is '/' (root path) with 43 security events. Detailed analysis of attackers targeting this path: The primary attacker is 54.241.100.9 from the US with 15 Bot attacks, followed by 23.137.105.102 from the US with 6 Bot attacks. Other notable attackers include 13.57.157.99 (US, 4 Bot attacks) and 140.245.125.138 (Singapore, 3 Bot attacks). The attack type is predominantly Bot (42 out of 43 events), with one Reputation-based detection from 45.141.215.153 (Poland). This indicates the root path is a common target for automated bot reconnaissance."
+expected_methods:
+  - "MUST use 2 or more round planning: Round 1 identifies the most attacked path, Round 2 and later queries attacker details for that path"
+  - "Round 1 query MUST discover the path value, not use a placeholder"
+  - "Round 2 query MUST use WHERE path = '<discovered_path>' based on Round 1 discovery"
+  - "Should use ARRAY JOIN attackTypes in Round 2 to get attack type breakdown"
+  - "Should GROUP BY clientIP, country in Round 2 to analyze attacker distribution"
+  - "Demonstrates incremental investigation where specific path value is needed for detailed attacker analysis"
