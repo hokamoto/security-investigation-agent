@@ -10,7 +10,7 @@
       "y": -23.54335468344675,
       "width": 769.8677211466782,
       "height": 417.1225418655383,
-      "angle": 6.264747453381304,
+      "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
       "fillStyle": "solid",
@@ -25,11 +25,11 @@
         "type": 3
       },
       "seed": 1717325634,
-      "version": 303,
-      "versionNonce": 1467600962,
+      "version": 385,
+      "versionNonce": 426078249,
       "isDeleted": false,
-      "boundElements": null,
-      "updated": 1765591277797,
+      "boundElements": [],
+      "updated": 1765599904119,
       "link": null,
       "locked": false
     },
@@ -789,10 +789,6 @@
       "isDeleted": false,
       "boundElements": [
         {
-          "id": "arrow_agent_vllm",
-          "type": "arrow"
-        },
-        {
           "id": "arrow_analyst_agent",
           "type": "arrow"
         },
@@ -882,12 +878,7 @@
       "version": 771,
       "versionNonce": 109622558,
       "isDeleted": false,
-      "boundElements": [
-        {
-          "id": "arrow_agent_vllm",
-          "type": "arrow"
-        }
-      ],
+      "boundElements": [],
       "updated": 1765544066947,
       "link": null,
       "locked": false,
@@ -973,8 +964,8 @@
       ],
       "lastCommittedPoint": null,
       "startBinding": {
-        "mode": "orbit",
         "elementId": "client1",
+        "mode": "orbit",
         "fixedPoint": [
           0.5001,
           0.5001
@@ -1354,8 +1345,8 @@
       ],
       "lastCommittedPoint": null,
       "startBinding": {
-        "mode": "orbit",
         "elementId": "client2",
+        "mode": "orbit",
         "fixedPoint": [
           0.5001,
           0.5001
@@ -2217,7 +2208,7 @@
       "version": 3,
       "versionNonce": 2050087874,
       "isDeleted": true,
-      "boundElements": null,
+      "boundElements": [],
       "updated": 1765543419932,
       "link": null,
       "locked": false,
@@ -2254,7 +2245,7 @@
       "version": 3,
       "versionNonce": 645379102,
       "isDeleted": true,
-      "boundElements": null,
+      "boundElements": [],
       "updated": 1765544011757,
       "link": null,
       "locked": false,
