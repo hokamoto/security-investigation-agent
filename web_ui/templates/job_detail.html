@@ -1,0 +1,190 @@
+% rebase('base', title=f"Job {job['id'][:8]}")
+
+<div class="card">
+    <h2>Job Details</h2>
+    <p><strong>Job ID:</strong> <code>{{job['id']}}</code></p>
+    <p><strong>Status:</strong> <span class="status-{{job['status']}}">{{job['status']}}</span></p>
+    <p><strong>Question:</strong></p>
+    <div style="background: #f9f9f9; padding: 15px; border-radius: 4px; margin: 10px 0;">
+        {{job['question']}}
+    </div>
+    <p class="meta">Created: {{job['created_at']}} UTC</p>
+    % if job['started_at']:
+        <p class="meta">Started: {{job['started_at']}} UTC</p>
+    % end
+    % if job['completed_at']:
+        <p class="meta">Completed: {{job['completed_at']}} UTC</p>
+    % end
+</div>
+
+% if job['status'] == 'pending':
+    <div class="card">
+        <p><strong>Status:</strong> Waiting in queue...</p>
+        % if queue_position:
+            <p>Queue position: <strong>#{{queue_position}}</strong></p>
+        % end
+        <p class="meta">This page will auto-refresh every 5 seconds.</p>
+    </div>
+
+% elif job['status'] == 'running':
+    <div class="card">
+        <p><strong>Status:</strong> Processing your request...</p>
+        <p class="meta">This page will auto-refresh every 5 seconds.</p>
+    </div>
+
+% elif job['status'] == 'completed':
+    % if not result_data:
+        <div class="error">
+            <strong>Error:</strong> Results file not found. The job completed but the output file is missing.
+        </div>
+    % else:
+        <div class="card">
+            <h2>Answer</h2>
+            <div class="answer">{{result_data.get('final_answer', 'No answer available')}}</div>
+        </div>
+
+        % investigation_log = result_data.get('investigation_log', [])
+        % if investigation_log:
+        <details>
+            <summary>Investigation Log ({{len(investigation_log)}} round{{'s' if len(investigation_log) != 1 else ''}})</summary>
+            <div>
+                % for rnd_idx, rnd in enumerate(investigation_log):
+                % if rnd_idx > 0:
+                <hr class="round-divider">
+                % end
+                <div class="round-section">
+                    <h3>Round {{rnd['round']}}</h3>
+
+                    % if rnd.get('strategy'):
+                    <div class="strategy-text">{{rnd['strategy']}}</div>
+                    % end
+
+                    % if rnd.get('planned_queries'):
+                    <h4>Planned Queries</h4>
+                    <ol>
+                        % for pq in rnd['planned_queries']:
+                        <li>
+                            <strong>{{pq['purpose']}}</strong>
+                            <pre>{{pq['sql']}}</pre>
+                        </li>
+                        % end
+                    </ol>
+                    % end
+
+                    % if rnd.get('executed_queries'):
+                    <h4>Executed Queries</h4>
+                    % for eq in rnd['executed_queries']:
+                    <details class="query-result-details">
+                        <summary>
+                            % if eq['success']:
+                            <span class="query-status-ok">OK</span>
+                            % else:
+                            <span class="query-status-fail">FAILED</span>
+                            % end
+                            Query #{{eq['query_id']}} — {{eq['purpose']}}
+                            % if eq['success'] and eq.get('row_count') is not None:
+                            ({{eq['row_count']}} row{{'s' if eq['row_count'] != 1 else ''}})
+                            % end
+                        </summary>
+                        <div>
+                            <pre>{{eq['sql']}}</pre>
+                            % if eq['success']:
+                                % if eq.get('rows') and len(eq['rows']) > 0:
+                                <div class="query-result-table-wrapper">
+                                    <table class="query-result-table">
+                                        <thead>
+                                            <tr>
+                                                % for col in eq.get('columns', []):
+                                                <th>{{col}}</th>
+                                                % end
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            % for row in eq['rows']:
+                                            <tr>
+                                                % for val in row:
+                                                <td>{{val}}</td>
+                                                % end
+                                            </tr>
+                                            % end
+                                        </tbody>
+                                    </table>
+                                </div>
+                                % else:
+                                <p class="meta">No rows returned</p>
+                                % end
+                            % else:
+                                <div class="query-error">{{eq.get('error_message', 'Unknown error')}}</div>
+                            % end
+                        </div>
+                    </details>
+                    % end
+                    % end
+
+                    % if rnd.get('synthesis_summary'):
+                    <h4>Synthesis</h4>
+                    <div class="synthesis-text">{{rnd['synthesis_summary']}}</div>
+                    % end
+
+                    <div>
+                        <strong>Decision:</strong>
+                        % if rnd.get('decision') == 'COMPLETE':
+                        <span class="decision-badge decision-complete">COMPLETE</span>
+                        % else:
+                        <span class="decision-badge decision-continue">CONTINUE</span>
+                        % end
+                    </div>
+                </div>
+                % end
+            </div>
+        </details>
+        % end
+
+        <details>
+            <summary>Statistics</summary>
+            <div>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-label">Planning Rounds</div>
+                        <div class="stat-value">{{result_data.get('total_rounds', 0)}}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Prompt Tokens</div>
+                        <div class="stat-value">{{f"{result_data.get('total_prompt_tokens', 0):,}"}}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Completion Tokens</div>
+                        <div class="stat-value">{{f"{result_data.get('total_completion_tokens', 0):,}"}}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Total Tokens</div>
+                        <div class="stat-value">{{f"{(result_data.get('total_prompt_tokens', 0) + result_data.get('total_completion_tokens', 0)):,}"}}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Elapsed Time</div>
+                        <div class="stat-value">{{f"{result_data.get('duration', 0.0):.1f}"}}s</div>
+                    </div>
+                </div>
+                % if result_data.get('log_file_name'):
+                    <p><strong>Log File:</strong> <code>{{result_data['log_file_name']}}</code></p>
+                % end
+            </div>
+        </details>
+
+    % end
+
+% elif job['status'] == 'failed':
+    <div class="error">
+        <h3>Job Failed</h3>
+        <p><strong>Error:</strong> {{job['error_message']}}</p>
+    </div>
+% end
+
+% if job['status'] in ('completed', 'failed'):
+    <div class="actions">
+        <form method="POST" action="/jobs/{{job['id']}}/delete" onsubmit="return confirm('Delete this job and all its results?');">
+            <button type="submit" class="danger">Delete Job</button>
+        </form>
+        <a href="/"><button type="button">Back to Home</button></a>
+    </div>
+% end

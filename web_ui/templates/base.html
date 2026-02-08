@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SIEM Agent - {{title}}</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.5;
+            background: #f9f9f9;
+        }
+        h1 { margin-bottom: 5px; }
+        h1 a { text-decoration: none; color: #000; }
+        h1 a:hover { color: #0066cc; }
+        h2 { margin-top: 30px; border-bottom: 2px solid #ddd; padding-bottom: 5px; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; background: white; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #f5f5f5; font-weight: 600; }
+        tr:hover { background: #fafafa; }
+        .status-pending { color: #666; }
+        .status-running { color: #0066cc; font-weight: bold; }
+        .status-completed { color: #006600; font-weight: bold; }
+        .status-failed { color: #cc0000; font-weight: bold; }
+        pre {
+            background: #f5f5f5;
+            padding: 15px;
+            overflow-x: auto;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            border: 1px solid #ddd;
+        }
+        form { margin: 20px 0; }
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 12px;
+            font-family: inherit;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            resize: vertical;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: #0066cc;
+            box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.1);
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            cursor: pointer;
+            background: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        button:hover { background: #0055aa; }
+        button:active { background: #004488; }
+        button.danger { background: #cc0000; }
+        button.danger:hover { background: #aa0000; }
+        .error {
+            background: #fee;
+            padding: 15px;
+            border: 1px solid #c00;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .message {
+            background: #efe;
+            padding: 15px;
+            border: 1px solid #0a0;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        details { margin: 15px 0; background: white; border: 1px solid #ddd; border-radius: 4px; }
+        summary {
+            cursor: pointer;
+            font-weight: bold;
+            padding: 12px;
+            background: #f5f5f5;
+            border-radius: 4px;
+            user-select: none;
+        }
+        summary:hover { background: #eee; }
+        details[open] summary { border-bottom: 1px solid #ddd; border-radius: 4px 4px 0 0; }
+        details > div { padding: 15px; }
+        .answer {
+            background: #f9f9f9;
+            padding: 20px;
+            border-left: 4px solid #0066cc;
+            margin: 15px 0;
+            white-space: pre-wrap;
+            line-height: 1.6;
+        }
+        .num {
+            font-weight: bold;
+            color: #0066cc;
+            cursor: help;
+            border-bottom: 1px dotted #0066cc;
+        }
+        .meta { color: #666; font-size: 0.9em; }
+        .actions { margin: 20px 0; }
+        .actions form { display: inline; margin-right: 10px; }
+        .truncate {
+            max-width: 400px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            margin: 15px 0;
+        }
+        .host-panel {
+            background: #fffaf2;
+            border: 1px solid #f0e1c4;
+            padding: 0;
+        }
+        .host-panel summary {
+            font-size: 0.95em;
+            padding: 6px 10px;
+        }
+        .host-panel summary::-webkit-details-marker { display: none; }
+        .host-panel summary::marker { content: ""; }
+        .host-panel summary::before {
+            content: "▶";
+            margin-right: 6px;
+        }
+        .host-panel[open] summary::before {
+            content: "▼";
+        }
+        .host-panel-body {
+            padding: 8px 10px 10px;
+        }
+        .host-header {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .host-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+        .host-chip {
+            background: #fff;
+            border: 1px solid #e3d5b6;
+            padding: 1px 6px;
+            border-radius: 999px;
+            font-size: 0.78em;
+        }
+        .host-status {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .host-status span {
+            font-size: 0.78em;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .stat-item {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #eee;
+        }
+        .stat-label { font-size: 0.9em; color: #666; }
+        .stat-value { font-size: 1.5em; font-weight: bold; color: #0066cc; margin-top: 5px; }
+        .round-section { padding: 10px 0; }
+        .round-section h3 { margin-top: 10px; margin-bottom: 8px; }
+        .round-section h4 { margin-top: 12px; margin-bottom: 6px; font-size: 0.95em; }
+        .strategy-text {
+            background: #f0f6ff;
+            padding: 10px 12px;
+            border-left: 3px solid #0066cc;
+            white-space: pre-wrap;
+            margin: 8px 0;
+            font-size: 0.9em;
+        }
+        .synthesis-text {
+            background: #f0fff4;
+            padding: 10px 12px;
+            border-left: 3px solid #28a745;
+            white-space: pre-wrap;
+            margin: 8px 0;
+            font-size: 0.9em;
+        }
+        .query-result-details {
+            margin: 6px 0;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            background: #fafafa;
+        }
+        .query-result-details summary {
+            padding: 8px 12px;
+            font-size: 0.9em;
+            background: #f5f5f5;
+        }
+        .query-result-details > div { padding: 10px 12px; }
+        .query-status-ok {
+            display: inline-block;
+            background: #28a745;
+            color: white;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        .query-status-fail {
+            display: inline-block;
+            background: #dc3545;
+            color: white;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        .query-result-table-wrapper { overflow-x: auto; margin: 8px 0; }
+        .query-result-table {
+            font-size: 0.82em;
+            border-collapse: collapse;
+            width: auto;
+            min-width: 100%;
+        }
+        .query-result-table th, .query-result-table td {
+            padding: 4px 8px;
+            white-space: nowrap;
+            border: 1px solid #ddd;
+        }
+        .query-result-table th { background: #f0f0f0; font-weight: 600; }
+        .query-error {
+            background: #fee;
+            border: 1px solid #c00;
+            border-radius: 4px;
+            padding: 8px 12px;
+            margin: 8px 0;
+            font-size: 0.9em;
+            color: #900;
+        }
+        .decision-badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 3px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+        .decision-complete { background: #d4edda; color: #155724; }
+        .decision-continue { background: #cce5ff; color: #004085; }
+        .round-divider { border: none; border-top: 1px solid #e0e0e0; margin: 16px 0; }
+    </style>
+    % if defined('head_extra'):
+    {{!head_extra}}
+    % end
+</head>
+<body>
+    <h1><a href="/">SIEM Agent</a></h1>
+    <div class="meta">Security Investigation Assistant</div>
+    {{!base}}
+</body>
+</html>

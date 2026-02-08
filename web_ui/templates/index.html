@@ -1,0 +1,69 @@
+% rebase('base', title='Home')
+
+<div class="card">
+    <h2>Submit Investigation</h2>
+    <form method="POST" action="/jobs" accept-charset="UTF-8">
+        <textarea
+            name="question"
+            required
+            placeholder="Enter your security question (e.g., How many SQL injection attacks occurred on akamai.fab34.com yesterday?)"
+            autofocus
+        ></textarea>
+        <button type="submit">Submit Investigation</button>
+    </form>
+</div>
+
+<details class="card host-panel">
+    <summary>Available Hosts</summary>
+    <div class="host-panel-body">
+        <div class="host-header">
+            <div class="host-status meta">
+                % if available_hosts_last_updated:
+                    <span>Updated: {{available_hosts_last_updated[:19].replace('T', ' ')}}Z</span>
+                % else:
+                    <span>Updated: not yet</span>
+                % end
+                % if available_hosts_last_error and available_hosts_last_error_at:
+                    <span>Last error: {{available_hosts_last_error_at[:19].replace('T', ' ')}}Z</span>
+                % end
+            </div>
+        </div>
+        % if available_hosts:
+            <div class="host-list">
+                % for host in available_hosts:
+                    <span class="host-chip"><code>{{host}}</code></span>
+                % end
+            </div>
+        % else:
+            <p class="meta">Available hosts are being refreshed. Please check back in a moment.</p>
+        % end
+    </div>
+</details>
+
+<h2>Recent Jobs</h2>
+% if not jobs:
+    <p class="meta">No jobs yet. Submit a question above to get started.</p>
+% else:
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Question</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            % for job in jobs:
+                <tr>
+                    <td><code>{{job['id'][:8]}}</code></td>
+                    <td class="truncate" title="{{job['question']}}">{{job['question']}}</td>
+                    <td class="status-{{job['status']}}">{{job['status']}}</td>
+                    <td class="meta">{{job['created_at'][:16].replace('T', ' ')}}</td>
+                    <td><a href="/jobs/{{job['id']}}">View</a></td>
+                </tr>
+            % end
+        </tbody>
+    </table>
+% end

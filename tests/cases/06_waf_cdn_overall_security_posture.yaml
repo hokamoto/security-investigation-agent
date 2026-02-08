@@ -1,7 +1,0 @@
-name: waf_cdn_overall_security_posture
-question: "For akamai.fab34.com between 2025-12-03T00:00:00Z and 2025-12-08T00:00:00Z, provide an overall security posture analysis: What percentage of WAF-detected attacks were blocked vs monitored, and what percentage of CDN requests resulted in error responses (4xx and 5xx)?"
-expected_answer: "Security posture for the period: WAF detected 477 security events. Of these, 204 (42.8%) were actively denied and 273 (57.2%) were monitored. CDN delivered 493 total requests with 393 errors (79.7% error rate): 213 forbidden (403), 176 not found (404), and 4 service unavailable (503). Only 100 requests (20.3%) succeeded with 200 status. The high error rate suggests aggressive blocking, and the WAF block rate of 42.8% indicates a balanced approach between blocking and monitoring for threat intelligence."
-expected_methods:
-  - "Must query both WAF and CDN logs to get complete security posture"
-  - "Should use countIf() or similar aggregation to calculate WAF action breakdown"
-  - "Should be answerable in 1 round with 2-3 queries"

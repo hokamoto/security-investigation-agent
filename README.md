@@ -37,18 +37,23 @@ Traditional text-to-SQL systems fail on complex security questions because they 
 **Adaptive Query Rewriting Prevents Context Overflow**
 Security investigations often generate massive result sets (tens of thousands of rows), but naive approaches either truncate data (losing critical patterns) or exceed LLM context windows. This agent detects result overflow automatically before retrieving all data, then delegates statistical rewriting to the LLM itself. The LLM transforms the original query into 1-3 targeted summary queries, preserving equivalent analytical insight while fitting comfortably in context.
 
-**Calculator Tool for Arithmetic Prevents LLM Math Errors**
-LLMs struggle with arithmetic (e.g., calculating percentage increases or rate comparisons) because they are token prediction models that learn numerical patterns from training data rather than executing symbolic computation rules. This agent externalizes all math to a `calculator` tool: when synthesis requires computing "211 / 712 * 100", the LLM invokes `calculator(expression="211 / 712 * 100", decimal_places=1)` and receives "29.6" as a verified result. The LLM never performs mental math; it only decides which calculations are needed.
+**Structured Tags for Arithmetic and Fact Citation**
+LLMs struggle with arithmetic (e.g., calculating percentage increases or rate comparisons) because they are token prediction models that learn numerical patterns from training data rather than executing symbolic computation rules. Additionally, LLMs may fabricate or misremember numbers from query results. This agent addresses both issues by externalizing all math and fact citation through inline pseudo-XML tags that the LLM embeds in its output:
 
-**<num> Tags Prevent Numeric Hallucination**
-LLMs may fabricate or misremember numbers from query results. This agent requires that all numeric claims use <num> tags that explicitly cite the data source and value, making hallucinated numbers detectable.
+- `<fact source="..." val="..." />` — cites a data source and numeric value from query results, preventing number hallucination
+- `<calc formula="..." expr="..." precision="N" />` — declares a mathematical expression to be evaluated externally (e.g., `expr="211 / 712 * 100"`)
+
+When synthesis requires computing "211 / 712 * 100", the LLM writes `<calc formula="..." expr="211 / 712 * 100" precision="1" />` and the post-processor evaluates it using a safe Python evaluator, returning "29.6" as a verified result. The LLM never performs mental math; it only decides which calculations are needed and declares them as structured tags. This makes both hallucinated numbers and calculation errors detectable and correctable.
 
 **LLM-as-a-Judge for Regression Testing**
-During development, this agent's analysis quality is validated through LLM-as-a-Judge evaluation for regression testing rather than traditional heuristics. When prompts or workflow logic change, automated tests execute the agent against pre-defined questions with known answers, then an LLM grader compares the agent's response to expected results and grading criteria.
+During development, this agent's analysis quality is validated through LLM-as-a-Judge evaluation for regression testing rather than traditional heuristics. When prompts or workflow logic change, automated tests execute the agent against pre-defined questions with known answers, then an LLM grader compares the agent's response to expected results.
+
+**BAML for Reliable Structured I/O**
+This agent uses [BAML (Basically a Made-up Language)](https://www.boundaryml.com/) instead of the native tool calling or structured output APIs that LLMs offer. Models' native function calling and constrained decoding appear reliable, but degrade significantly on smaller, self-hosted LLMs: models miss required fields, hallucinate JSON keys, or produce malformed output that silently breaks downstream logic. This instability makes the I/O boundary between the LLM and the agent workflow the most fragile point in the system, and it becomes worse as model size decreases. BAML takes a fundamentally different approach. Rather than constraining the model's token generation at decode time, BAML lets the model generate freely, then transforms imperfect LLM output into valid, typed data structures. This "be liberal in what you accept" philosophy means the agent gets well-typed outputs even when the underlying 20B-parameter model produces slightly malformed output. 
 
 ## Agent Workflow
 
-1. **Plan**: LLM generates 1-5 simple SQL queries with answerability checks, validates against domain rules (time windows, host scope), and stores the investigation plan.
+1. **Plan**: LLM generates 1-5 simple SQL queries with answerability checks (requires explicit time period and target host in the question), validates against domain rules, and stores the investigation plan.
 2. **Execute**: Runs queries sequentially with validation and one LLM-guided repair attempt on errors. Detects overflow and invokes statistical summary rewrite if the row limit is exceeded. Stores full results or summaries in execution history.
 3. **Synthesize**: LLM analyzes all query results across all rounds, generates answer with <num> tags for numeric claims, assigns confidence level, and enumerates data gaps.
 4. **Re-plan Decision**: LLM evaluates if additional investigation is needed by checking answer completeness, confidence, and remaining questions. Routes to re-planning if needed or ends the workflow.
@@ -61,8 +66,43 @@ During development, this agent's analysis quality is validated through LLM-as-a-
 - Ensure Python with `uv` (or your preferred runner) is available; dependencies are managed via `pyproject.toml`.
 
 ## Usage
+
+### Command Line Interface (CLI)
 - CLI question: `uv run -m siem_agent "How many SQL injection attacks occurred yesterday?"`
 - Interactive: `uv run -m siem_agent` and enter your question when prompted.
+
+### Web Interface
+The web frontend provides a browser-based interface for submitting investigations and viewing results asynchronously.
+
+**Starting the Web Server:**
+```bash
+# Terminal 1: Start the web server (default: http://localhost:8080)
+uv run -m web_ui
+
+# Terminal 2: Start the worker process (executes jobs from the queue)
+uv run -m web_ui.worker
+```
+
+**Features:**
+- Submit investigation questions via web form
+- Track job status with auto-refresh (pending → running → completed)
+- View results with rendered `<num>` tags, collapsible query details, and statistics
+- Job history and deletion
+- No authentication (internal use only)
+
+**Configuration:** Customize via environment variables (`SIEM_WEB_HOST`, `SIEM_WEB_PORT`, `SIEM_WEB_MAX_PENDING_JOBS`, etc.)
+
+## Log Viewer
+
+The Log Viewer is a standalone web application for inspecting the agent's session logs, designed for debugging investigations and understanding how the agent reasons through multi-round analysis.
+
+When the agent produces unexpected results, understanding *why* requires tracing through every decision: which queries it planned, what data came back, how it synthesized results, and whether it chose to re-plan. The structured JSONL logs capture all of this, but reading raw JSON is impractical. The Log Viewer provides a browser-based interface that makes this investigation trace readable and navigable.
+
+**Starting the Log Viewer:**
+```bash
+cd log-viewer && python app.py --logs-dir ../logs
+# Opens at http://localhost:8081
+```
 
 ## Example Interaction
 

@@ -1,0 +1,270 @@
+tests:
+# =============================================================================
+# Smoke Tests (simple single-query tests)
+# =============================================================================
+- name: smoke_waf_event_count
+  question: For akamai.fab34.com between 2026-01-03T00:00:00Z and 2026-01-08T00:00:00Z,
+    how many total WAF security events were recorded?
+  acceptance_criteria:
+    - The answer must state that 935 WAF security events were recorded
+
+- name: smoke_attack_type_distribution
+  question: For akamai.fab34.com between 2026-01-03T00:00:00Z and 2026-01-08T00:00:00Z,
+    what are the different types of attacks detected by WAF and how many of each type
+    occurred?
+  acceptance_criteria:
+    - The answer must identify 4 distinct attack types
+    - The answer must state Bot attacks occurred 471 times (most common)
+    - The answer must state WAF attacks occurred 269 times
+    - The answer must state DoS attacks occurred 189 times
+    - The answer must state Reputation-based detections occurred 7 times
+
+# =============================================================================
+# WAF Analysis Tests
+# =============================================================================
+- name: waf_top_attacker_detailed_analysis
+  question: For akamai.fab34.com between 2026-01-03T00:00:00Z and 2026-01-08T00:00:00Z,
+    identify the IP address with the most WAF security events. Then provide a detailed
+    breakdown of what specific paths this IP targeted and the count for each attack type,
+    and summarize the total count for each attack type.
+  acceptance_criteria:
+    - The answer must identify 40.113.19.56 as the top attacking IP
+    - The answer must state this IP had 161 WAF security events
+    - The answer must mention DoS attacks (117 events)
+    - The answer must mention Bot attacks (44 events)
+
+- name: waf_most_attacked_path_analysis
+  question: For akamai.fab34.com between 2026-01-03T00:00:00Z and 2026-01-08T00:00:00Z,
+    which path received the most WAF security events? Provide detailed information
+    about the attackers targeting this path, including their IP addresses, countries,
+    and count of each attack type. Is there a predominant attack type?
+  acceptance_criteria:
+    - The answer must identify "/" (root path) as the most attacked path
+    - The answer must state 70 security events occurred on this path
+    - The answer must mention Bot as the predominant attack type
+    - The answer must include at least 2 attacker IP addresses
+    - The answer must include country information for at least one attacker
+
+- name: waf_dos_attacker_campaign_analysis
+  question: 'For akamai.fab34.com between 2026-01-03T00:00:00Z and 2026-01-08T00:00:00Z,
+    identify the IP address responsible for the most DoS attacks. Then analyze this
+    attacker''s complete campaign: what other attack types did they use (with count for each type), what was
+    their geographic origin, and what was the timeline distribution of their attacks
+    on an hourly basis?'
+  acceptance_criteria:
+    - The answer must identify 40.113.19.56 as the top DoS attacker
+    - The answer must state this IP had 117 DoS events
+    - The answer must mention the attacker is from Ireland (IE)
+    - The answer must mention Bot attacks (44 events) as another attack type used
+
+- name: waf_path_temporal_pattern_analysis
+  question: For akamai.fab34.com between 2026-01-03T00:00:00Z and 2026-01-08T00:00:00Z,
+    identify the path that received the highest number of attack attempts. Then analyze
+    the hourly distribution of attacks against this path over the specified timeframe
+    to identify peak attack times.
+  acceptance_criteria:
+    - The answer must identify "/" as the most attacked path with 70 attacks
+    - The answer must identify 2026-01-04 06:00 as the peak hour (6 attacks)
+
+# =============================================================================
+# WAF-CDN Correlation Tests
+# =============================================================================
+- name: waf_cdn_correlation_deny_vs_403
+  question: For akamai.fab34.com between 2026-01-03T00:00:00Z and 2026-01-08T00:00:00Z,
+    compare the number of WAF deny actions with the number of CDN 403 responses. Are
+    they similar?
+  acceptance_criteria:
+    - The answer must state WAF denied 465 requests
+    - The answer must state CDN delivered 605 HTTP 403 responses
+    - The answer must note that CDN 403s exceed WAF denies
+
+- name: waf_cdn_env_file_attacks
+  question: For akamai.fab34.com between 2026-01-03T00:00:00Z and 2026-01-08T00:00:00Z,
+    analyze attacks targeting paths starting with /.env. How many were detected by WAF and how
+    many resulted in 403 responses at the CDN?
+  acceptance_criteria:
+    - The answer must state WAF detected 45 security events for paths starting with /.env
+    - The answer must state CDN recorded 65 HTTP 403 responses for paths starting with /.env
+
+- name: waf_cdn_overall_security_posture
+  question: For akamai.fab34.com between 2026-01-03T00:00:00Z and 2026-01-08T00:00:00Z,
+    what percentage of WAF-detected attacks were blocked vs monitored, and what percentage
+    of CDN requests resulted in error responses (4xx and 5xx)?
+  acceptance_criteria:
+    - The answer must state approximately 49.7% of WAF attacks were denied
+    - The answer must state approximately 50.3% were monitored
+    - The answer must state approximately 87% of CDN requests resulted in errors
+
+- name: waf_monitor_mode_bot_impact
+  question: For akamai.fab34.com between 2026-01-03T00:00:00Z and 2026-01-08T00:00:00Z,
+    identify the IP address with the most WAF monitor-mode Bot detections. Then analyze
+    the CDN logs to see what HTTP status codes their requests received.
+  acceptance_criteria:
+    - The answer must identify 52.187.162.248 as the top monitor-mode Bot attacker
+    - The answer must state this IP had 77 WAF detections in monitor mode
+    - The answer must mention 404 responses (approximately 100 or 64-65%)
+    - The answer must mention 403 responses (approximately 54 or 35%)
+
+# =============================================================================
+# Unanswerable Tests (missing required information)
+# =============================================================================
+- name: unanswerable_authenticated_users
+  question: For akamai.fab34.com between 2026-01-03T00:00:00Z and 2026-01-08T00:00:00Z,
+    which authenticated usernames were targeted by the attacks, and how many attacks
+    did each user account receive?
+  acceptance_criteria:
+    - The answer must indicate that this question cannot be answered
+    - The answer must explain that username information is not reliably available in the logs
+
+- name: unanswerable_successful_attack_identification
+  question: For akamai.fab34.com between 2026-01-03T00:00:00Z and 2026-01-08T00:00:00Z,
+    identify which of the Bot attacks detected by WAF in 'monitor' mode (not blocked)
+    actually succeeded in compromising the server or achieving their malicious objective.
+    Provide a list of successful attacks with evidence of compromise.
+  acceptance_criteria:
+    - The answer must indicate that this question cannot be answered
+    - The answer must explain that WAF/CDN logs cannot determine if attacks succeeded
+
+- name: unanswerable_missing_time_period
+  question: How many SQL injection attacks were blocked on akamai.fab34.com?
+  acceptance_criteria:
+    - The answer must indicate that no time period is specified
+
+- name: unanswerable_missing_host
+  question: Show me the top 10 attacking IPs in the last 7 days
+  acceptance_criteria:
+    - The answer must indicate that no target host is specified
+
+- name: unanswerable_missing_both
+  question: How many attacks were blocked?
+  acceptance_criteria:
+    - The answer must indicate that both time period and host are missing
+
+# =============================================================================
+# Cross-Host Analysis Test
+# =============================================================================
+- name: answerable_explicit_all_hosts
+  question: What are the top 5 attack types across all hosts between 2026-01-03T00:00:00Z
+    and 2026-01-08T00:00:00Z?
+  acceptance_criteria:
+    - The answer must mention Bot attacks with approximately 14,054 occurrences
+    - The answer must mention WAF attacks with approximately 1,653 occurrences
+    - The answer must mention DoS attacks with 189 occurrences
+    - The answer must mention Reputation-based detections with 143 occurrences
+
+# =============================================================================
+# Multi-Round Investigation Tests (extended time range 2026-01-01 to 2026-01-08)
+# =============================================================================
+- name: waf_top_attacker_campaign_multi_round
+  question: 'Which single IP address launched the most diverse set of attack types
+    against akamai.fab34.com between 2026-01-01T00:00:00Z and 2026-01-08T00:00:00Z?
+    Once identified, provide a complete profile of this attacker: list all the attack
+    types used, all paths they targeted, all rule categories triggered, the distribution
+    of actions taken against them, and their temporal attack pattern (attacks per day).'
+  acceptance_criteria:
+    - The answer must identify 62.60.131.73 as having the most diverse attack types
+    - The answer must state this IP used 4 distinct attack types
+    - The answer must mention the attack types include Bot, WAF, DoS, and Reputation
+
+- name: waf_attack_spike_forensics
+  question: 'On akamai.fab34.com between 2026-01-01T00:00:00Z and 2026-01-08T00:00:00Z,
+    identify the single 1-hour window that had the highest attack volume. Then analyze
+    that specific hour in detail: what attack types dominated, which IPs were most
+    active, and what specific ruleTags were triggered most frequently?'
+  acceptance_criteria:
+    - The answer must identify 2026-01-01 07:00-08:00 as the peak hour
+    - The answer must state 197 attacks/events/requests occurred in this hour (semantic equivalents acceptable)
+    - The answer must identify 3.25.169.229 as the source IP
+    - The answer must mention WAF attacks dominated (145 occurrences)
+
+- name: waf_cdn_attack_to_traffic_ratio
+  question: For the top 10 IPs by WAF attack count on akamai.fab34.com between 2026-01-01T00:00:00Z
+    and 2026-01-08T00:00:00Z, what percentage of each IP's total requests were attacks?
+    Calculate this using CDN logs for total request count and WAF logs for attack
+    count.
+  acceptance_criteria:
+    - The answer must include attack-to-traffic ratios for multiple IPs
+    - The answer must identify IPs with 100% attack rate (e.g., 3.25.169.229, 40.113.19.56, 62.60.131.73)
+    - The answer must show varying ratios across different IPs
+
+- name: waf_lfi_payload_analysis
+  question: 'For all Local File Inclusion (LFI) attacks on akamai.fab34.com between
+    2026-01-01T00:00:00Z and 2026-01-08T00:00:00Z, analyze: (a) which paths were targeted,
+    (b) where in the request the malicious payload was found, and (c) what the actual
+    attack payloads were. Group by path and show the most common payload locations
+    and example payloads for them.'
+  acceptance_criteria:
+    - The answer must mention /.env as one of the most targeted LFI paths
+    - The answer must mention ruleSelector REQUEST_FILENAME_RAW as a common payload location
+
+- name: waf_monitor_mode_effectiveness
+  question: 'For attacks set to ''monitor'' action (not blocked) on akamai.fab34.com
+    between 2026-01-01T00:00:00Z and 2026-01-08T00:00:00Z: (1) What attack types were
+    most commonly monitored rather than blocked? (2) For the top 5 IPs that received
+    ''monitor'' actions, did those same IPs also trigger ''deny'' actions for different
+    attacks in the same period?'
+  acceptance_criteria:
+    - The answer must state that Bot attacks were predominantly monitored
+    - The answer must list top IPs receiving monitor actions (including 52.187.162.248)
+    - The answer must indicate whether these IPs also triggered deny actions
+
+- name: waf_penaltybox_trigger_analysis
+  question: 'Analyze the PENALTYBOX mechanism effectiveness on akamai.fab34.com between
+    2026-01-01T00:00:00Z and 2026-01-08T00:00:00Z: (1) How many unique IPs triggered
+    PENALTYBOX rules? (2) Which IP triggered PENALTYBOX most frequently, how many
+    times did this IP trigger PENALTYBOX rules, and what was their first PENALTYBOX
+    trigger timestamp? (3) What was their total attack activity during the entire
+    analysis period?'
+  acceptance_criteria:
+    - The answer must state 11 unique IPs triggered PENALTYBOX rules
+    - The answer must identify 185.177.72.13 as triggering PENALTYBOX most frequently
+    - The answer must state 185.177.72.13 had 119 PENALTYBOX occurrences
+
+- name: waf_geographic_attack_sophistication
+  question: "Rank the top 5 countries by 'attack sophistication' on akamai.fab34.com
+    between 2026-01-01T00:00:00Z and 2026-01-08T00:00:00Z, where sophistication
+    is defined as: [attack diversity score] * [evasion rate] where (attack diversity score = number of distinct attack types)
+    (evasion rate = percentage of attacks that were monitored or alerted but not blocked).
+    For each country, also show their total attack volume and primary attack type."
+  acceptance_criteria:
+    - The answer must rank countries by the sophistication formula
+    - The answer must include GB (Great Britain) as a top sophisticated country
+    - The answer must show total attack volume for each country
+    - The answer must identify primary attack type for each country (likely Bot)
+
+- name: waf_multi_rule_attack_fingerprinting
+  question: "Find complex 'heavy hitter' attacks on akamai.fab34.com between 2026-01-01T00:00:00Z
+    and 2026-01-08T00:00:00Z -- attacks that triggered 5 or more security rules.
+    For these attacks: (1) What's the distribution of how many rules were triggered
+    (5 rules, 6 rules, etc.)? (2) Are these attacks concentrated from specific IPs
+    or distributed across many sources?"
+  acceptance_criteria:
+    - The answer must state 486 attacks triggered 5 or more rules
+    - The answer must show the distribution (7 rules being most common with 399 attacks)
+    - The answer must indicate whether attacks are concentrated or distributed
+
+- name: waf_user_agent_anomaly_detection
+  question: 'On akamai.fab34.com between 2026-01-01T00:00:00Z and 2026-01-08T00:00:00Z,
+    analyze User-Agents in WAF logs to find those with high denial rates. Specifically:
+    (1) For each distinct User-Agent in WAF logs, calculate what percentage of its
+    WAF-detected events resulted in deny action (deny rate = denied count / total WAF events for that UA).
+    (2) Identify User-Agents where this deny rate exceeds 80%. (3) For the highest-volume
+    User-Agent with deny rate exceeding 80%, what attack types does it carry?'
+  acceptance_criteria:
+    - The answer must identify that there are User-Agents with deny rates exceeding 80%
+    - The answer must identify the highest-volume suspicious User-Agent
+    - The answer must list attack types for the top suspicious User-Agent
+
+- name: waf_reputation_vs_payload_detection
+  question: 'Compare the characteristics of attacks detected by reputation-based rules
+    vs payload-based rules on akamai.fab34.com between 2026-01-01T00:00:00Z and 2026-01-08T00:00:00Z.
+    Reputation-based attacks are those flagged by IP reputation systems or penalty
+    box rules. Payload-based attacks are those detected by analyzing actual attack
+    signatures in the request (like SQL injection, XSS, command injection, or file
+    inclusion attempts). Compare: (1) Volume of each type, (2) Action distribution
+    (deny vs monitor), (3) IP overlap (are reputation-flagged IPs also triggering
+    payload detection rules?).'
+  acceptance_criteria:
+    - The answer must compare volumes of reputation-based vs payload-based detections
+    - The answer must discuss action distribution (deny vs monitor) for each type
+    - The answer must analyze IP overlap between the two detection types

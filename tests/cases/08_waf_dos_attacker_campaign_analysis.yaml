@@ -1,9 +1,0 @@
-name: waf_dos_attacker_campaign_analysis
-question: "For akamai.fab34.com between 2025-12-03T00:00:00Z and 2025-12-08T00:00:00Z, identify the IP address responsible for the most DoS attacks. Then analyze this attacker's complete campaign: what other attack types did they use, what was their geographic origin, and what was the timeline distribution of their attacks on an hourly basis?"
-expected_answer: "The IP 4.190.185.37 from Japan is responsible for the most DoS attacks with 189 DoS events. Complete campaign analysis: This IP conducted a total of 219 attacks, with 189 DoS attacks (86.3%) and 30 Bot attacks (13.7%). The attacker targeted a wide variety of PHP files, indicating automated vulnerability scanning. This attacker only performed attacks on 2025-12-06 21:00:00 (UTC). This IP represents a sophisticated threat actor conducting multi-vector attacks from Japan."
-expected_methods:
-  - "MUST use 2-round planning: Round 1 finds top DoS attacker, Round 2 analyzes complete campaign for that IP"
-  - "Round 2 query MUST use WHERE clientIP = '<discovered_ip>' to get complete attack profile"
-  - "Should use ARRAY JOIN attackTypes in Round 2 for complete attack type breakdown"
-  - "May use toStartOfHour() or toDate() for temporal distribution analysis"
-  - "Demonstrates complex multi-step investigation: identify top DoS source → comprehensive profile"

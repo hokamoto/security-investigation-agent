@@ -1,8 +1,0 @@
-name: waf_cdn_correlation_deny_vs_403
-question: "For akamai.fab34.com between 2025-12-03T00:00:00Z and 2025-12-08T00:00:00Z, compare the number of WAF deny actions with the number of CDN 403 responses. Are they similar?"
-expected_answer: "WAF denied 204 requests, while CDN delivered 213 HTTP 403 responses. These numbers are very close, suggesting that most WAF deny actions resulted in 403 responses at the CDN layer. The 9-request difference (213 - 204) may indicate some 403 responses from other sources or timing differences in logging."
-expected_methods:
-  - "Must query both WAF (appliedAction = 'deny') and CDN (statusCode = 403) logs"
-  - "Should use simple COUNT queries for both tables"
-  - "Should be answerable in 1 round with 2 independent queries"
-  - "Demonstrates cross-table correlation analysis"

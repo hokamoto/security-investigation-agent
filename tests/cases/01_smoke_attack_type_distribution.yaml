@@ -1,5 +1,0 @@
-name: smoke_attack_type_distribution
-question: "For akamai.fab34.com between 2025-12-03T00:00:00Z and 2025-12-08T00:00:00Z, what are the different types of attacks detected by WAF and how many of each type occurred?"
-expected_answer: "WAF detected 4 different attack types during the period: Bot attacks were the most common with 273 occurrences, followed by DoS attacks with 189 occurrences, WAF-specific attacks with 14 occurrences, and Reputation-based detections with 1 occurrence."
-expected_methods:
-  - "This is a smoke test - should be answerable in 1 round with GROUP BY query"

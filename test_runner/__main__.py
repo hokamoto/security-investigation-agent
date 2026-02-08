@@ -1,4 +1,5 @@
-from siem_agent.main import main
+from test_runner.main import main
+
 
 if __name__ == "__main__":
     main()

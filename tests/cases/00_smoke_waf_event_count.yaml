@@ -1,6 +1,0 @@
-name: smoke_waf_event_count
-question: "For akamai.fab34.com between 2025-12-03T00:00:00Z and 2025-12-08T00:00:00Z, how many total WAF security events were recorded?"
-expected_answer: "During the specified period, 477 WAF security events were recorded for akamai.fab34.com."
-expected_methods:
-  - "This is a smoke test - should be answerable in 1 round with a simple COUNT query"
-  - "Should use WHERE host = 'akamai.fab34.com' and timestamp filters"

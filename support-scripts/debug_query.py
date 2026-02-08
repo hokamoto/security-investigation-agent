@@ -9,6 +9,7 @@ import clickhouse_connect
 import argparse
 import csv
 import sys
+import re
 
 # ============================================================
 # EDIT THESE QUERIES FOR YOUR DEBUGGING NEEDS
@@ -17,15 +18,48 @@ import sys
 # ============================================================
 QUERIES = [
     """
-    SELECT * FROM akamai_jp.siem WHERE has(attackTypes, 'Bot') LIMIT 3
+    SELECT * FROM system.columns WHERE table = '{siem_log_table_name}' AND database = '{database_name}'
     """
 ]
 # ============================================================
 
 
+def _append_settings_clause(sql: str, max_result_rows: int, readonly: int = 2) -> str:
+    """
+    Append SETTINGS clause to SQL query if not already present.
+
+    Args:
+        sql: SQL query string
+        max_result_rows: max_result_rows setting value
+        readonly: readonly setting value (default: 2 for debug script)
+
+    Returns:
+        SQL string with SETTINGS clause appended
+    """
+    # Strip trailing whitespace and semicolons
+    sql = sql.rstrip().rstrip(";")
+
+    # Check if query already has SETTINGS clause
+    if re.search(r"\bSETTINGS\b", sql, re.IGNORECASE):
+        # SETTINGS clause already exists, return as-is
+        return sql
+
+    # Check if this is a SET command (skip SETTINGS clause for SET commands)
+    if re.match(r"^\s*SET\b", sql, re.IGNORECASE):
+        # SET command, return as-is
+        return sql
+
+    return sql
+
+
 def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Run SQL queries against ClickHouse")
+    parser.add_argument(
+        "query",
+        nargs="?",
+        help="SQL query to execute (if not provided, uses QUERIES constant)",
+    )
     parser.add_argument("--csv", action="store_true", help="Output results in CSV format")
     args = parser.parse_args()
 
@@ -49,22 +83,28 @@ def main():
         database=ch_config["database"],
         send_receive_timeout=300,
         connect_timeout=30,
-        settings={
-            "readonly": 2,
-            "max_result_rows": 300,
-            "max_result_bytes": 100000000,
-            "result_overflow_mode": "break",
-        }
     )
+
+    # Determine which queries to execute
+    if args.query:
+        # Use query from command-line argument
+        queries_to_execute = [args.query]
+    else:
+        # Use queries from QUERIES constant
+        queries_to_execute = QUERIES
 
     # Format queries with database and table name
     formatted_queries = [
-        query.format(
-            database_name=ch_config["database"],
-            siem_log_table_name=ch_config["siem_log_table_name"],
-            cdn_log_table_name=ch_config["cdn_log_table_name"]
+        _append_settings_clause(
+            query.format(
+                database_name=ch_config["database"],
+                siem_log_table_name=ch_config["siem_log_table_name"],
+                cdn_log_table_name=ch_config["cdn_log_table_name"],
+            ),
+            max_result_rows=ch_config["max_result_rows"],
+            readonly=2,
         )
-        for query in QUERIES
+        for query in queries_to_execute
     ]
 
     try:
@@ -73,11 +113,7 @@ def main():
         csv_header_written = False
 
         if args.csv:
-            csv_writer = csv.writer(
-                sys.stdout,
-                quoting=csv.QUOTE_NONNUMERIC,
-                lineterminator='\n'
-            )
+            csv_writer = csv.writer(sys.stdout, quoting=csv.QUOTE_NONNUMERIC, lineterminator="\n")
 
         # Execute queries sequentially
         for idx, formatted_query in enumerate(formatted_queries, 1):
@@ -108,7 +144,7 @@ def main():
                         for val in row:
                             if isinstance(val, str):
                                 # Replace actual newlines with space to prevent CSV breaking
-                                cleaned_val = val.replace('\r\n', ' ').replace('\n', ' ').replace('\r', ' ')
+                                cleaned_val = val.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
                                 cleaned_row.append(cleaned_val)
                             else:
                                 cleaned_row.append(val)

@@ -1,25 +1,43 @@
-%% Workflow of the SIEM agent multi-node investigation with re-planning
+%% SIEM Agent Investigation Workflow
+%% How the agent uses LLM to investigate security questions iteratively
 flowchart TD
-    A[Start<br>Security question received] --> B[Plan initial investigation<br>LLM drafts 1-5 SQL queries]
-    B -->|Question cannot be answered with available data| Z1[End<br>Explain missing data]
-    B -->|Plan ready| C[Run a query<br>validate and auto-fix SQL]
-    C -->|Too many rows| C1[LLM rewrites as<br>statistical summaries: 1-3 queries]
-    C1 --> C2[Run summary queries<br>overview + patterns + samples]
-    C2 --> D[Save results for analysis]
-    C -->|Query finished, errors captured| D
-    D -->|More queries in this plan| C
-    D -->|All queries done| E[LLM analyzes all results<br>drafts answer + confidence]
-    E --> F{Should we investigate further?}
-    F -->|Enough evidence or max rounds reached| Z2[End<br>Share final answer + gaps]
-    F -->|Dig deeper using findings| G[LLM creates follow-up queries<br>uses values seen in results]
-    G --> C
+    START([Security question received]) --> PLAN["LLM creates investigation plan<br>1-5 SQL queries with purposes"]
 
-    %% Notes
-    classDef terminal fill:#f9f0f0,stroke:#cc3333,stroke-width:1.5px
-    classDef decision fill:#e6f3ff,stroke:#0066cc,stroke-width:2px
-    classDef replan fill:#fff4e6,stroke:#ff9900,stroke-width:2px
-    classDef summary fill:#e6ffe6,stroke:#00cc66,stroke-width:2px
-    class Z1,Z2 terminal
-    class F decision
-    class G replan
-    class C1,C2 summary
+    PLAN -->|Question cannot be answered<br>with available data| END_UNANS([Explain why<br>and stop])
+    PLAN -->|Plan ready| EXEC_LOOP{More queries<br>to run?}
+
+    EXEC_LOOP -->|Yes| EXEC_SQL[Run SQL query<br>against ClickHouse]
+
+    EXEC_SQL -->|Success| EXEC_LOOP
+
+    EXEC_SQL -->|Failure| REPAIR{"LLM rewrites<br>broken SQL"}
+    REPAIR -->|Fixed| EXEC_SQL
+
+    EXEC_LOOP -->|All queries done| SYNTH["LLM analyzes all results<br>Creates answer"]
+
+    SYNTH --> CALC_EVAL["Evaluate &lt;calc&gt; tags<br>Compute percentages, ratios, sums"]
+
+    CALC_EVAL --> DECISION{Enough evidence<br>to answer?}
+
+    DECISION -->|Yes| END_OK([Return final answer])
+
+    DECISION -->|No, need more data| MAX_CHECK{Max rounds<br>reached?}
+    MAX_CHECK -->|Yes| END_FORCED([Return partial answer])
+
+    MAX_CHECK -->|No| REPLAN["LLM creates follow-up queries<br>based on what was found so far"]
+    REPLAN --> EXEC_LOOP
+
+    %% Styling
+    classDef llmCall fill:#e6f3ff,stroke:#0066cc,stroke-width:2px
+    classDef decision fill:#fff4e6,stroke:#ff9900,stroke-width:2px
+    classDef endOk fill:#e6ffe6,stroke:#00cc66,stroke-width:2px
+    classDef endErr fill:#f9e6e6,stroke:#cc3333,stroke-width:1.5px
+    classDef process fill:#f5f5f5,stroke:#999,stroke-width:1px
+    classDef highlight fill:#f0e6ff,stroke:#9966ff,stroke-width:2.5px
+
+    class PLAN,REPAIR,SYNTH,REPLAN llmCall
+    class DECISION,EXEC_LOOP,MAX_CHECK decision
+    class END_OK endOk
+    class END_UNANS,END_FORCED endErr
+    class START,EXEC_SQL process
+    class CALC_EVAL highlight
