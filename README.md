@@ -69,7 +69,7 @@ This agent uses [BAML (Basically a Made-up Language)](https://www.boundaryml.com
 ## Usage
 
 ### Command Line Interface (CLI)
-`uv run -m siem_agent "How many SQL injection attacks occurred yesterday?"
+`uv run -m siem_agent "How many SQL injection attacks occurred yesterday?"`
 
 ### Web Interface
 The web frontend provides a browser-based interface for submitting investigations and viewing results asynchronously.
