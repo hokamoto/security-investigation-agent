@@ -62,7 +62,8 @@ This agent uses [BAML (Basically a Made-up Language)](https://www.boundaryml.com
 ![Agent Workflow](workflow.png)
 
 ## Setup
-- Copy `config.yaml.example` to `config.yaml` and fill in ClickHouse and vLLM endpoints plus credentials.
+- Copy `config.yaml.example` to `config.yaml` and fill in the ClickHouse connection details and credentials.
+- Configure vLLM endpoints in `siem_agent/baml_src/clients.baml` and `test_runner/baml_src/clients.baml` — set `base_url` to your vLLM server address and `model` to the model name you are serving. After editing these files, run `uv run baml-cli generate` to regenerate the BAML client code.
 - Ensure Python with `uv` (or your preferred runner) is available; dependencies are managed via `pyproject.toml`.
 
 ## Usage
@@ -121,7 +122,7 @@ This example demonstrates the agent's incremental planning and re-planning capab
 The agent generates an investigation plan to identify the most active attacker:
 
 ```
-Answerable: True | Complexity: simple
+Answerable: True
 Rationale: Query WAF logs to identify the client IP with the highest application-layer
 attack count over the last 7 days.
 ```
@@ -175,7 +176,7 @@ query the CDN logs to determine total requests from the same IP.
 The agent generates a new investigation plan that uses the discovered IP address (`203.0.113.42`) in follow-up queries:
 
 ```
-Answerable: True | Complexity: moderate
+Answerable: True
 Rationale: The prior analysis identified IP 203.0.113.42 as the top attacker over the
 past week but lacked details on attack techniques (ruleTags), payloads (ruleData), and
 whether the IP also sent non-attack traffic. The new queries retrieve per-rule details
