@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -28,6 +28,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/fd/24/07417df4feca33a074629f58d240646d4870d1391e4311a79d12b106a2ef/baml_py-0.218.1-cp38-abi3-musllinux_1_1_x86_64.whl", hash = "sha256:4343d60ec58fbdcef1c870444a8cf41d540f80da6079bb9bce8de484d7b9705a", size = 24615303, upload-time = "2026-01-27T19:40:09.3Z" },
     { url = "https://files.pythonhosted.org/packages/3e/d1/6429ed91f044b8f69a5f73c26ac47e9853b296e4f4800dd69d28e10a4a6b/baml_py-0.218.1-cp38-abi3-win_amd64.whl", hash = "sha256:a45f667acff4c253226168a5450f334fa99fc2693dd40fc31d8c2a4cf46cba58", size = 21966147, upload-time = "2026-01-27T19:40:12.595Z" },
     { url = "https://files.pythonhosted.org/packages/92/28/8b81c8543654155a2ec10a26f6495b6595699024390b0e7340f56be6a83a/baml_py-0.218.1-cp38-abi3-win_arm64.whl", hash = "sha256:593d500c892e98916771dd8d55cdc562acb11ce7f13d8c048ba7df903a047e62", size = 20437606, upload-time = "2026-01-27T19:40:15.323Z" },
+]
+
+[[package]]
+name = "bottle"
+version = "0.13.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/7a/71/cca6167c06d00c81375fd668719df245864076d284f7cb46a694cbeb5454/bottle-0.13.4.tar.gz", hash = "sha256:787e78327e12b227938de02248333d788cfe45987edca735f8f88e03472c3f47", size = 98717, upload-time = "2025-06-15T10:08:59.439Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/83/f6/b55ec74cfe68c6584163faa311503c20b0da4c09883a41e8e00d6726c954/bottle-0.13.4-py2.py3-none-any.whl", hash = "sha256:045684fbd2764eac9cdeb824861d1551d113e8b683d8d26e296898d3dd99a12e", size = 103807, upload-time = "2025-06-15T10:08:57.691Z" },
 ]
 
 [[package]]
@@ -433,6 +442,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "baml-py" },
+    { name = "bottle" },
     { name = "clickhouse-connect" },
     { name = "pydantic" },
     { name = "pyyaml" },
@@ -450,6 +460,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "baml-py", specifier = ">=0.218.1" },
+    { name = "bottle", specifier = ">=0.13.4" },
     { name = "clickhouse-connect", specifier = ">=0.10.0" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pyyaml", specifier = ">=6.0.0" },
