@@ -106,193 +106,168 @@ cd log-viewer && python app.py --logs-dir ../logs
 
 ## Example Interaction
 
-This example demonstrates the agent's incremental planning and re-planning capabilities. The user asks a complex question that requires multiple investigation rounds.
+This example demonstrates the agent's incremental planning and re-planning capabilities. The user asks a complex question about multi-phase attacks that requires correlating reconnaissance activity with subsequent exploitation attempts.
 
 ### User Question
 
-> What types of attack techniques did the IP address that conducted the most application-layer attacks over the past week use? Also, what were the payloads used in those attacks? Did that IP address also send any non-attack requests?
+> For www.example.com between 2026-01-01 and 2026-01-08, identify IP addresses that executed multi-phase attacks. Define phase 1 (reconnaissance) as requests to common discovery paths (`/.env%`, `/admin%`, `/wp-login%`, `/wp-admin%`, `/.git%`, `/config%`). Define phase 2 (exploitation) as WAF-detected events at least 1 hour after reconnaissance. Show the earliest reconnaissance timestamp, earliest exploitation timestamp, and ruleTags triggered during exploitation.
 
 ---
 
-### Initial Investigation
+### Initial Investigation (Round 0)
 
 **Planning**
 
-The agent generates an investigation plan to identify the most active attacker:
+The agent generates an investigation plan to identify multi-phase attackers:
 
 ```
-Answerable: True
-Rationale: Query WAF logs to identify the client IP with the highest application-layer
-attack count over the last 7 days.
+Strategy: First, identify all IPs that made reconnaissance requests to the specified
+discovery paths. Then, for those IPs, locate the earliest WAF-detected exploitation
+event that occurred at least one hour after the first reconnaissance request. Finally,
+list the unique ruleTags triggered during exploitation.
 ```
 
 **Execution**
 
-Query 1: *Find the client IP that triggered the most application-layer attacks*
+Query 1: *Find IPs that performed reconnaissance requests and their earliest timestamp*
 
 ```sql
-SELECT clientIP, count() AS attack_count
-FROM akamai.siem
-ARRAY JOIN ruleTags AS tag
-WHERE host IN ('api.example.com', 'shop.example.com', 'cdn.example.com' /* ... */)
-AND timestamp >= now() - INTERVAL 7 DAY
-AND tag LIKE 'ASE/WEB_ATTACK/%'
-GROUP BY clientIP
-ORDER BY attack_count DESC
-LIMIT 1
+SELECT cliIP, min(reqTimeSec) AS recon_ts
+FROM akamai.logs
+WHERE reqHost = 'www.example.com'
+  AND reqTimeSec BETWEEN '2026-01-01T00:00:00Z' AND '2026-01-08T00:00:00Z'
+  AND (reqPath LIKE '/.env%' OR reqPath LIKE '/admin%'
+       OR reqPath LIKE '/wp-login%' OR reqPath LIKE '/wp-admin%'
+       OR reqPath LIKE '/.git%' OR reqPath LIKE '/config%')
+GROUP BY cliIP
 ```
 
-Results:
+Results (showing 5 of 28 IPs):
 ```
-clientIP      | attack_count
---------------+-------------
-203.0.113.42  | 106
+cliIP           | recon_ts
+----------------+-------------------------
+203.0.113.89    | 2026-01-01 00:46:39.276
+203.0.113.15    | 2026-01-01 05:01:43.979
+203.0.113.42    | 2026-01-01 21:48:28.563
+203.0.113.127   | 2026-01-02 11:59:02.578
+203.0.113.201   | 2026-01-03 15:50:40.625
+... (23 more IPs)
 ```
 
 **Synthesis**
 
-The agent identifies the top attacker but recognizes that the answer is incomplete:
+The agent identifies 28 IP addresses that accessed common discovery paths but recognizes the investigation is incomplete:
 
-> IP address 203.0.113.42 conducted the most application-layer attacks (106 events) in the last 7 days. However, the specific attack techniques, payloads, and whether it sent non-attack requests require additional queries.
+> We have identified 28 IP addresses that accessed common discovery paths on www.example.com during the specified week. However, we have not yet determined which of these IPs later triggered WAF-detected exploitation events at least one hour after their reconnaissance activity. The next step is to correlate these IPs with WAF logs.
 
 **Re-planning Decision**
 
 ```
 Decision: Additional investigation needed
 
-Rationale: The current answer identifies the top IP but does not provide the requested
-attack techniques, payloads, or evidence of non-attack traffic. To fully answer the
-user's question, we must query the WAF logs for ruleTags and ruleData for that IP and
-query the CDN logs to determine total requests from the same IP.
+Rationale: The current results identify IPs that performed reconnaissance but do not
+provide evidence of subsequent exploitation attempts. To answer the user's question,
+we must join this reconnaissance data with WAF logs to find exploitation events that
+occurred at least one hour later.
 ```
 
 ---
 
-### Follow-up Investigation
+### Follow-up Investigation (Round 1)
 
 **Re-planning**
 
-The agent generates a new investigation plan that uses the discovered IP address (`203.0.113.42`) in follow-up queries:
+The agent generates follow-up queries that use the reconnaissance results to identify multi-phase attackers:
 
 ```
-Answerable: True
-Rationale: The prior analysis identified IP 203.0.113.42 as the top attacker over the
-past week but lacked details on attack techniques (ruleTags), payloads (ruleData), and
-whether the IP also sent non-attack traffic. The new queries retrieve per-rule details
-for that IP, count non-attack requests, and provide a total request count for context.
+Strategy: Join the reconnaissance set with the WAF SIEM logs to find exploitation
+events that occurred at least one hour after the first reconnaissance request. For
+each qualifying IP, retrieve the earliest exploitation timestamp and the ruleTags
+triggered during that exploitation phase.
 ```
 
 **Execution**
 
-Query 2: *List distinct application-layer attack technique tags used by the top IP*
+Query 2: *Find earliest exploitation timestamp and count per IP after reconnaissance*
 
 ```sql
-SELECT tag, count() AS cnt
-FROM akamai.siem
-ARRAY JOIN ruleTags AS tag
-WHERE clientIP = '203.0.113.42'
-AND timestamp >= now() - INTERVAL 7 DAY
-AND host IN ('api.example.com', 'shop.example.com', 'cdn.example.com' /* ... */)
-AND tag LIKE 'ASE/WEB_ATTACK/%'
-GROUP BY tag
-ORDER BY cnt DESC
+SELECT siem.clientIP, min(siem.timestamp) AS exploit_ts, count() AS exploit_count
+FROM akamai.siem AS siem
+JOIN (
+  SELECT cliIP, min(reqTimeSec) AS recon_ts
+  FROM akamai.logs
+  WHERE reqHost = 'www.example.com'
+    AND reqTimeSec BETWEEN '2026-01-01T00:00:00Z' AND '2026-01-08T00:00:00Z'
+    AND (reqPath LIKE '/.env%' OR reqPath LIKE '/admin%'
+         OR reqPath LIKE '/wp-login%' OR reqPath LIKE '/wp-admin%'
+         OR reqPath LIKE '/.git%' OR reqPath LIKE '/config%')
+  GROUP BY cliIP
+) AS recon ON siem.clientIP = recon.cliIP
+WHERE siem.host = 'www.example.com'
+  AND has(siem.attackTypes, 'WAF')
+  AND siem.timestamp > recon.recon_ts + INTERVAL 1 HOUR
+  AND siem.timestamp BETWEEN '2026-01-01T00:00:00Z' AND '2026-01-08T00:00:00Z'
+GROUP BY siem.clientIP
 ```
 
 Results:
 ```
-tag                | cnt
--------------------+----
-ASE/WEB_ATTACK/LFI | 106
+clientIP      | exploit_ts           | exploit_count
+--------------+----------------------+--------------
+203.0.113.89  | 2026-01-01 22:45:30  | 13
+203.0.113.15  | 2026-01-03 17:00:04  | 4
+203.0.113.42  | 2026-01-04 09:39:31  | 4
 ```
 
-Query 3: *Retrieve the payload substrings that triggered the WAF for the top IP*
-
-```sql
-SELECT payload, count() AS cnt
-FROM akamai.siem
-ARRAY JOIN ruleData AS payload
-WHERE clientIP = '203.0.113.42'
-AND timestamp >= now() - INTERVAL 7 DAY
-AND host IN ('api.example.com', 'shop.example.com', 'cdn.example.com' /* ... */)
-AND payload != ''
-GROUP BY payload
-ORDER BY cnt DESC
-```
-
-Results (top 15 rows shown):
-```
-payload                     | cnt
-----------------------------+----
-Vector Score: 1000 ...      | 34
-DOSATCK=10                  | 17
-Vector Score: 5 ...         | 16
-/.env                       | 3
-/.env.bak                   | 2
-/.env.local                 | 1
-/.env.prod                  | 1
-/.env.staging               | 1
-/api/.env                   | 1
-/app/.env                   | 1
-/admin/.env                 | 1
-/backend/.env               | 1
-/mailer/.env                | 1
-/wp-config.php              | 1
-/wp-config.php.old          | 1
-... (49 more configuration file paths)
-```
-
-Query 4: *Count total requests from the top IP in the CDN logs*
+Query 3: *List ruleTags triggered during exploitation events per IP*
 
 ```sql
-SELECT count() AS total_requests
-FROM akamai.logs
-WHERE cliIP = '203.0.113.42'
-AND reqTimeSec >= now() - INTERVAL 7 DAY
-AND reqHost IN ('api.example.com', 'shop.example.com', 'cdn.example.com' /* ... */)
+SELECT siem.clientIP, siem.timestamp, ruleTag
+FROM akamai.siem AS siem
+ARRAY JOIN siem.ruleTags AS ruleTag
+JOIN (
+  SELECT cliIP, min(reqTimeSec) AS recon_ts
+  FROM akamai.logs
+  WHERE reqHost = 'www.example.com'
+    AND reqTimeSec BETWEEN '2026-01-01T00:00:00Z' AND '2026-01-08T00:00:00Z'
+    AND (reqPath LIKE '/.env%' OR reqPath LIKE '/admin%'
+         OR reqPath LIKE '/wp-login%' OR reqPath LIKE '/wp-admin%'
+         OR reqPath LIKE '/.git%' OR reqPath LIKE '/config%')
+  GROUP BY cliIP
+) AS recon ON siem.clientIP = recon.cliIP
+WHERE siem.host = 'www.example.com'
+  AND has(siem.attackTypes, 'WAF')
+  AND siem.timestamp > recon.recon_ts + INTERVAL 1 HOUR
+  AND siem.timestamp BETWEEN '2026-01-01T00:00:00Z' AND '2026-01-08T00:00:00Z'
+ORDER BY siem.clientIP, siem.timestamp
 ```
 
-Results:
+Results (showing earliest exploitation events):
 ```
-total_requests
---------------
-423
-```
-
-Query 5: *Show the distribution of attackTypes for the top IP*
-
-```sql
-SELECT attackTypes, count() AS cnt
-FROM akamai.siem
-WHERE clientIP = '203.0.113.42'
-AND timestamp >= now() - INTERVAL 7 DAY
-AND host IN ('api.example.com', 'shop.example.com', 'cdn.example.com' /* ... */)
-GROUP BY attackTypes
-ORDER BY cnt DESC
-```
-
-Results:
-```
-attackTypes | cnt
-------------+----
-['WAF']     | 386
-['DoS']     | 20
+clientIP      | timestamp            | ruleTag
+--------------+----------------------+---------------------------
+203.0.113.89  | 2026-01-01 22:45:30  | ASE/WEB_ATTACK/LFI
+203.0.113.89  | 2026-01-01 22:45:30  | ASE/WEB_ATTACK/LFI
+203.0.113.15  | 2026-01-03 17:00:04  | ASE/WEB_ATTACK/LFI
+203.0.113.15  | 2026-01-03 17:00:04  | ASE/WEB_ATTACK/LFI
+203.0.113.42  | 2026-01-04 09:39:31  | AKAMAI/WAF/PENALTYBOX
+203.0.113.42  | 2026-01-04 09:39:31  | ASE/WEB_ATTACK/LFI
+... (34 more rows)
 ```
 
 **Synthesis**
 
 The agent now has complete data to answer all parts of the question:
 
-> The top attacker in the last 7 days was IP **203.0.113.42**, which generated 106 application-layer attacks. All of those attacks were classified as **LFI (Local File Inclusion)** – the only ruleTag that appeared for this IP in the WAF logs was ASE/WEB_ATTACK/LFI.
+> Across the week of 2026-01-01 to 2026-01-08, **28 unique client IPs** accessed common discovery paths on www.example.com. **Three of those IPs** later triggered WAF-detected exploitation events at least one hour after their first reconnaissance request:
 >
-> The payloads that triggered the WAF were primarily attempts to read sensitive configuration files. The most common payload strings included:
-> * `/.env`, `/.env.bak`, `/.env.local`, `/.env.staging`, `/.env.prod`
-> * `/api/.env`, `/app/.env`, `/admin/.env`, `/backend/.env`, `/mailer/.env`
-> * `/wp-config.php`, `/wp-config.php.old`
-> * And 49 other variations of configuration file paths
+> * **IP 203.0.113.89**: Reconnaissance at `2026-01-01 00:46:39`, exploitation at `2026-01-01 22:45:30` (22 hours later). Triggered ruleTags: `ASE/WEB_ATTACK/LFI`, `AKAMAI/WAF/PENALTYBOX`
 >
-> In the CDN logs, the same IP made **423 requests** during the same period. Subtracting the 106 WAF-triggered attacks gives **317 non-attack requests**. Thus the IP did send a significant amount of legitimate traffic in addition to the LFI attempts.
+> * **IP 203.0.113.15**: Reconnaissance at `2026-01-01 05:01:43`, exploitation at `2026-01-03 17:00:04` (60 hours later). Triggered ruleTag: `ASE/WEB_ATTACK/LFI`
 >
-> **Summary**: The top attacker used LFI techniques (ASE/WEB_ATTACK/LFI) with payloads attempting to read `.env`, `.htaccess`, and other configuration files. Non-attack traffic: yes – 317 requests out of 423 total (75% legitimate, 25% attacks).
+> * **IP 203.0.113.42**: Reconnaissance at `2026-01-01 21:48:28`, exploitation at `2026-01-04 09:39:31` (60 hours later). Triggered ruleTags: `AKAMAI/WAF/PENALTYBOX`, `ASE/WEB_ATTACK/LFI`
+>
+> All three IPs used **Local File Inclusion (LFI)** attack techniques during the exploitation phase, and two were also flagged by Akamai's reputation-based penalty box system, indicating repeat offender status.
 
 **Re-planning Decision**
 
@@ -300,9 +275,9 @@ The agent now has complete data to answer all parts of the question:
 Decision: Investigation complete
 
 Rationale: The answer fully addresses all parts of the user's question: it identifies
-the top attacker, specifies that all application-layer attacks were LFI, lists the
-payloads, and confirms that the IP also sent non-attack requests. No additional data or
-clarification is required.
+IPs that performed both reconnaissance and exploitation phases, provides the earliest
+timestamp for each phase, and lists the specific ruleTags triggered during exploitation.
+No additional data is required.
 ```
 
 ## Disclaimer and Legal Notices
