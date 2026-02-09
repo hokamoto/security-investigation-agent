@@ -332,3 +332,32 @@ template_string CalcTagRequirements() #"
 - Values already computed by SQL (use `<fact>` tags instead)
 - Simple reporting of query results (use `<fact>` tags instead)
 "#
+
+template_string AdvancedSqlRequirements(
+  failed_queries: FailedQueryForRepair[]
+) #"
+## Advanced SQL Repair Constraints
+
+{% for query in failed_queries %}
+{% if 'groupUniqArray' in query.error_message %}
+### ARRAY JOIN + groupUniqArray Output Column Naming Conflict (query {{ query.query_index }})
+
+When using `ARRAY JOIN source_array AS alias` with `groupUniqArray(alias)`, the output column alias MUST differ from the source array column name. ClickHouse cannot resolve the identifier when they collide.
+
+**Fails** (output name = source array name):
+```sql
+SELECT clientIP, groupUniqArray(tag) AS ruleTags FROM t ARRAY JOIN ruleTags AS tag GROUP BY clientIP
+-- Error: Unknown identifier: 'groupUniqArray(tag)'
+```
+
+**Works** (output name differs):
+```sql
+SELECT clientIP, groupUniqArray(tag) AS unique_rule_tags FROM t ARRAY JOIN ruleTags AS tag GROUP BY clientIP
+```
+
+This applies to ALL array columns: `ruleTags`, `attackTypes`, `rules`, `ruleMessages`, `ruleSelectors`, `ruleData`.
+When repairing query {{ query.query_index }}, rename the output column to avoid the conflict (e.g., prefix with `unique_` or `collected_`).
+
+{% endif %}
+{% endfor %}
+"#

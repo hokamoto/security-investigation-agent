@@ -12,9 +12,17 @@ class InvestigationPlan {
   queries PlannedQuery[]? @description("SQL queries (null when is_answerable=false)")
 }
 
-// SQL repair result from RepairSql BAML function
-class SqlRepairResult {
-  explanation string @description("Detailed explanation of what was fixed and why it was fixed that way.")
+// Batch SQL repair types
+class FailedQueryForRepair {
+  query_index int @description("1-based index of this query in the batch")
+  purpose string @description("What this query was intended to discover")
+  sql string @description("The failed SQL query")
+  error_message string @description("The error message from execution")
+}
+
+class BatchSqlRepairItem {
+  query_index int @description("1-based index matching the input query")
+  explanation string @description("Detailed explanation of what was fixed and why")
   sql string @description("Corrected ClickHouse-compatible SQL query. Must be single-line with no newline characters.")
 }
 

@@ -1,35 +1,40 @@
-// SQL Repair Function for SIEM Agent
-// This function takes a failed SQL query and attempts to repair it
+// Batch SQL Repair Function for SIEM Agent
+// This function takes one or more failed SQL queries and attempts to repair them in a single LLM call
 
-function RepairSql(
-  sql_query: string,
-  error_message: string,
-  purpose: string,
+function RepairSqlBatch(
+  failed_queries: FailedQueryForRepair[],
   database_name: string,
   siem_log_table_name: string,
   cdn_log_table_name: string,
   available_hosts: string[],
   available_rule_tags: string[],
   session_timestamp: string
-) -> SqlRepairResult {
+) -> BatchSqlRepairItem[] {
   client GptOss
   prompt #"
     {{ _.role("system") }}
     {{ SystemPrompt(database_name, siem_log_table_name, cdn_log_table_name, available_hosts, available_rule_tags, session_timestamp) }}
     {{ SqlRequirements(database_name, siem_log_table_name, cdn_log_table_name) }}
+    {{ AdvancedSqlRequirements(failed_queries) }}
 
     ## Available Hosts
     {{ available_hosts }}
 
     ## Available ruleTags
     {{ available_rule_tags }}
-    
+
     ## Task
-    A SQL query has failed execution with an error. Analyze the error and provide the corrected SQL in the `sql` field.
+    One or more SQL queries have failed execution with errors. For EACH failed query below, analyze the error and provide the corrected SQL.
+
+    **CRITICAL INSTRUCTIONS:**
+    1. You MUST return exactly one repair for each failed query listed below.
+    2. Each repair MUST include the `query_index` that matches the input query's `query_index`.
+    3. Repair each query independently — do not let one repair influence another.
+    4. Preserve each query's original intent and purpose. Only fix the specific error.
 
     ### Repair-Specific Guidelines
 
-    1. **Preserve the query's intent and purpose**: Only fix the specific error. Do NOT change the query's purpose, logic, or expected results. The original query's intent (shown in "Query Purpose" above) must be maintained.
+    1. **Preserve the query's intent and purpose**: Only fix the specific error. Do NOT change the query's purpose, logic, or expected results. The original query's intent (shown in each query's "purpose" field) must be maintained.
        - Do NOT rewrite queries to switch tables (WAF ↔ CDN). The table choice reflects the user's intent.
        - Do NOT add or remove filtering conditions, aggregations, or change the output columns unless required to fix the error.
 
@@ -57,20 +62,11 @@ function RepairSql(
        - WAF table uses: `host`, `timestamp` (DateTime), `clientIP`, `attackTypes`, `appliedAction`, etc.
        - CDN table uses: `reqHost`, `reqTimeSec` (DateTime64(3)), `cliIP`, `statusCode`, `proto`, etc.
 
-    Please analyze the error and provide the corrected SQL query. Focus specifically on fixing the issue mentioned in the error message while preserving the query's original intent.
+    Please analyze each error and provide the corrected SQL query. Focus specifically on fixing the issue mentioned in each error message while preserving each query's original intent.
     {{ _.role("user") }}
-    **Query Purpose:**
-    {{ purpose }}
+    ## Failed Queries to Repair
 
-    **Failed SQL:**
-    ```sql
-    {{ sql_query }}
-    ```
-
-    **Error Message:**
-    ```
-    {{ error_message }}
-    ```
+    {{ failed_queries }}
     {{ _.role("system") }}
     {{ ctx.output_format }}
   "#

@@ -1,15 +1,20 @@
 """Query execution module for BAML-based SIEM Agent."""
 
-from typing import List, Optional
+from dataclasses import dataclass
+from typing import Dict, List, Optional
 
 from baml_py.baml_py import BamlError
 import requests
 
 from siem_agent.agent_state import AgentState, ExecutedQuery
 from siem_agent.baml_client import b
-from siem_agent.baml_client.types import InvestigationPlan, SqlRepairResult
+from siem_agent.baml_client.types import (
+    BatchSqlRepairItem,
+    FailedQueryForRepair,
+    InvestigationPlan,
+)
 from siem_agent.clickhouse import ClickHouseClient
-from siem_agent.sql_utils import normalize_clickhouse_array_functions
+from siem_agent.sql_utils import normalize_clickhouse_array_functions, apply_sql_transformations
 
 
 # Python dataclass to track execution results (not BAML-generated)
@@ -33,31 +38,44 @@ class QueryExecutionResult:
         self.formatted_result = formatted_result
 
 
-def repair_sql_with_baml(
-    sql_query: str,
-    error_message: str,
-    purpose: str,
+@dataclass
+class _FailedQueryInfo:
+    """Tracks a failed query pending batch repair."""
+
+    query_index: int  # 1-based index within this batch
+    entry_index: int  # index into query_entries list
+    query_id: int
+    purpose: str
+    current_sql: str
+    error_message: str
+
+
+def repair_sql_batch_with_baml(
+    failed_queries: List[_FailedQueryInfo],
     state: AgentState,
-    parent_query_id: int,
-) -> Optional[SqlRepairResult]:
-    """Call BAML RepairSql function and return repair result.
+) -> Dict[int, BatchSqlRepairItem]:
+    """Call BAML RepairSqlBatch to repair failed queries in one LLM call.
 
     Args:
-        sql_query: The failed SQL query
-        error_message: The error message from validation/execution
-        purpose: The intended purpose of the query (from PlannedQuery)
+        failed_queries: List of failed query info to repair
         state: Agent state containing configuration and database metadata
-        parent_query_id: The query ID of the original query being repaired
 
     Returns:
-        SqlRepairResult with repaired sql and explanation, None if repair call failed
+        Dict mapping query_index -> BatchSqlRepairItem. Empty dict if call failed.
     """
+    baml_inputs = [
+        FailedQueryForRepair(
+            query_index=fq.query_index,
+            purpose=fq.purpose,
+            sql=fq.current_sql,
+            error_message=fq.error_message,
+        )
+        for fq in failed_queries
+    ]
+
     try:
-        # Create the BAML request
-        req = b.request.RepairSql(
-            sql_query=sql_query,
-            error_message=error_message,
-            purpose=purpose,
+        req = b.request.RepairSqlBatch(
+            failed_queries=baml_inputs,
             database_name=state.database_name,
             siem_log_table_name=state.siem_log_table_name,
             cdn_log_table_name=state.cdn_log_table_name,
@@ -66,57 +84,61 @@ def repair_sql_with_baml(
             session_timestamp=state.session_timestamp,
         )
 
-        # Make the HTTP call with timing
         with state.session_logger.timed_event() as timer:
             res = requests.post(url=req.url, headers=req.headers, json=req.body.json())
             response_json = res.json()
 
-        # Parse the response
         raw_content = response_json["choices"][0]["message"]["content"]
         if raw_content is None:
-            raise ValueError(
-                f"LLM returned None content. Response: {response_json}"
-            )
+            raise ValueError(f"LLM returned None content. Response: {response_json}")
         try:
-            parsed: SqlRepairResult = b.parse.RepairSql(raw_content)
+            parsed_list: List[BatchSqlRepairItem] = b.parse.RepairSqlBatch(raw_content)
         except BamlError as e:
-            # Log BAML validation error details
             error_details = {
                 "error_type": "BAML_ValidationError",
-                "function": "RepairSql",
+                "function": "RepairSqlBatch",
                 "raw_output": getattr(e, "raw_output", str(e)),
                 "message": getattr(e, "message", str(e)),
                 "prompt": getattr(e, "prompt", "N/A"),
                 "detailed_message": getattr(e, "detailed_message", str(e)),
             }
             state.session_logger.log_error(
-                e, context=f"BAML validation error in RepairSql: {error_details}"
+                e,
+                context=f"BAML validation error in RepairSqlBatch: {error_details}",
             )
-            # Re-raise to crash the program as requested
             raise
 
-        # Normalize array functions in repaired SQL
-        if parsed.sql:
-            parsed.sql = normalize_clickhouse_array_functions(parsed.sql)
+        # Normalize array functions and apply SQL transformations in all repaired SQL
+        for item in parsed_list:
+            if item.sql:
+                item.sql = normalize_clickhouse_array_functions(item.sql)
+                item.sql = apply_sql_transformations(item.sql, state)
 
-        # Extract prompt for logging
+        # Build result dict keyed by query_index
+        result_map: Dict[int, BatchSqlRepairItem] = {}
+        for item in parsed_list:
+            result_map[item.query_index] = item
+
+        # Log the batch repair LLM call
         prompt_full = _extract_prompt_from_request(req)
-
-        # Log the repair LLM call
+        parent_ids = [
+            f"{state.current_replanning_round}_sql_{fq.query_id}"
+            for fq in failed_queries
+        ]
         state.session_logger.log_llm_call(
-            call_type="repair",
+            call_type="batch_repair",
             prompt_full=prompt_full,
             raw_response=raw_content,
-            parsed_response=parsed,
+            parsed_response=parsed_list,
             response_json=response_json,
             duration=timer.duration,
-            parent_id=f"{state.current_replanning_round}_sql_{parent_query_id}",
+            parent_id=",".join(parent_ids),
         )
 
-        return parsed
+        return result_map
 
     except Exception:
-        return None
+        return {}
 
 
 def _extract_prompt_from_request(req) -> str:
@@ -147,7 +169,12 @@ def execute_investigation_plan(
     investigation_plan: InvestigationPlan,
     state: AgentState,
 ) -> List[QueryExecutionResult]:
-    """Execute all queries in investigation plan sequentially.
+    """Execute all queries in investigation plan with batch repair for failures.
+
+    Uses a two-phase approach per repair round:
+    - Phase 1: Execute all incomplete queries, collecting successes and failures
+    - Phase 2: Batch repair all failures in one LLM call
+    - Phase 3: Apply repairs and loop back
 
     Args:
         investigation_plan: BAML InvestigationPlan with queries to execute
@@ -161,44 +188,59 @@ def execute_investigation_plan(
 
     results: List[QueryExecutionResult] = []
 
+    # Assign query IDs upfront and build mutable tracking entries
+    query_entries: List[dict] = []
     for query in investigation_plan.queries:
-        # Assign global query_id from state (LLM does not generate query_id)
         assigned_query_id = state.next_query_id
         state.next_query_id += 1
 
-        original_sql = query.sql
-        current_sql = query.sql
-        repair_attempt = 0
-        query_completed = False
+        # Apply SQL transformations (including HDX JOIN workaround)
+        transformed_sql = apply_sql_transformations(query.sql, state)
 
-        # Retry loop for repair attempts
-        while not query_completed and repair_attempt <= state.max_sql_repair_retries:
-            # Execute query with timing
+        query_entries.append(
+            {
+                "query_id": assigned_query_id,
+                "purpose": query.purpose,
+                "original_sql": query.sql,
+                "current_sql": transformed_sql,
+                "completed": False,
+                "repair_attempt": 0,
+            }
+        )
+
+    for repair_round in range(state.max_sql_repair_retries + 1):
+        # Phase 1: Execute all incomplete queries
+        pending_failures: List[_FailedQueryInfo] = []
+
+        for idx, entry in enumerate(query_entries):
+            if entry["completed"]:
+                continue
+
             with state.session_logger.timed_event() as timer:
                 exec_result = state.ch_client.execute_query(
-                    sql=current_sql, prepare=True
+                    sql=entry["current_sql"], prepare=True
                 )
+
+            is_repair = entry["repair_attempt"] > 0
 
             if exec_result["success"]:
                 row_count = exec_result["row_count"]
 
-                # Log the successful SQL query
                 state.session_logger.log_sql_query(
-                    query_id=assigned_query_id,
-                    purpose=query.purpose,
-                    sql_original=original_sql,
+                    query_id=entry["query_id"],
+                    purpose=entry["purpose"],
+                    sql_original=entry["original_sql"],
                     sql_executed=exec_result["sql"],
                     success=True,
                     duration=timer.duration,
                     row_count=row_count,
                     columns=exec_result.get("columns"),
                     rows=exec_result.get("rows"),
-                    is_repair_attempt=repair_attempt > 0,
-                    repair_attempt_number=repair_attempt if repair_attempt > 0 else 0,
-                    parent_query_id=assigned_query_id if repair_attempt > 0 else None,
+                    is_repair_attempt=is_repair,
+                    repair_attempt_number=(entry["repair_attempt"] if is_repair else 0),
+                    parent_query_id=(entry["query_id"] if is_repair else None),
                 )
 
-                # Format result (handle 0 rows as well)
                 if row_count == 0:
                     formatted = "No rows returned"
                 else:
@@ -209,7 +251,7 @@ def execute_investigation_plan(
 
                 results.append(
                     QueryExecutionResult(
-                        query_id=assigned_query_id,
+                        query_id=entry["query_id"],
                         status="ok",
                         sql=exec_result["sql"],
                         row_count=row_count,
@@ -217,73 +259,87 @@ def execute_investigation_plan(
                     )
                 )
 
-                # Store successfully executed query in state
                 state.executed_queries.append(
                     ExecutedQuery(
-                        query_id=assigned_query_id,
+                        query_id=entry["query_id"],
                         sql=exec_result["sql"],
-                        purpose=query.purpose,
+                        purpose=entry["purpose"],
                         result=exec_result,
                     )
                 )
-                query_completed = True
+                entry["completed"] = True
             else:
-                # Execution failed
                 concise_error = exec_result.get("error_message", exec_result["error"])
 
-                # Log the failed SQL query
                 state.session_logger.log_sql_query(
-                    query_id=assigned_query_id,
-                    purpose=query.purpose,
-                    sql_original=original_sql,
-                    sql_executed=exec_result.get("sql", current_sql),
+                    query_id=entry["query_id"],
+                    purpose=entry["purpose"],
+                    sql_original=entry["original_sql"],
+                    sql_executed=exec_result.get("sql", entry["current_sql"]),
                     success=False,
                     duration=timer.duration,
                     error_message=concise_error,
-                    is_repair_attempt=repair_attempt > 0,
-                    repair_attempt_number=repair_attempt if repair_attempt > 0 else 0,
-                    parent_query_id=assigned_query_id if repair_attempt > 0 else None,
+                    is_repair_attempt=is_repair,
+                    repair_attempt_number=(entry["repair_attempt"] if is_repair else 0),
+                    parent_query_id=(entry["query_id"] if is_repair else None),
                 )
 
-                if repair_attempt >= state.max_sql_repair_retries:
+                if repair_round >= state.max_sql_repair_retries:
                     # Max retries exhausted
-                    error_msg = f"Execution failed after {repair_attempt} repair attempts: {concise_error}"
+                    error_msg = f"Execution failed after {entry['repair_attempt']} repair attempts: {concise_error}"
                     results.append(
                         QueryExecutionResult(
-                            query_id=assigned_query_id,
+                            query_id=entry["query_id"],
                             status="execution_failed",
                             sql=exec_result["sql"],
                             error_message=error_msg,
                         )
                     )
-                    # Failed queries are NOT stored in state.executed_queries
-                    query_completed = True
+                    entry["completed"] = True
                 else:
-                    # Attempt repair
-                    repair_result = repair_sql_with_baml(
-                        sql_query=current_sql,
-                        error_message=concise_error,
-                        purpose=query.purpose,
-                        state=state,
-                        parent_query_id=assigned_query_id,
+                    pending_failures.append(
+                        _FailedQueryInfo(
+                            query_index=len(pending_failures) + 1,
+                            entry_index=idx,
+                            query_id=entry["query_id"],
+                            purpose=entry["purpose"],
+                            current_sql=entry["current_sql"],
+                            error_message=concise_error,
+                        )
                     )
 
-                    if repair_result and repair_result.sql:
-                        # Update SQL and retry
-                        current_sql = repair_result.sql
-                        repair_attempt += 1
-                        continue  # Retry with repaired SQL
-                    else:
-                        # Repair failed
-                        results.append(
-                            QueryExecutionResult(
-                                query_id=assigned_query_id,
-                                status="execution_failed",
-                                sql=exec_result["sql"],
-                                error_message=concise_error,
-                            )
-                        )
-                        # Failed queries are NOT stored in state.executed_queries
-                        query_completed = True
+        # Phase 2: Batch repair all failures
+        if not pending_failures:
+            break
+
+        repair_map = repair_sql_batch_with_baml(
+            failed_queries=pending_failures,
+            state=state,
+        )
+
+        # Phase 3: Apply repairs to query entries
+        any_repaired = False
+        for fq in pending_failures:
+            repair = repair_map.get(fq.query_index)
+            if repair and repair.sql:
+                entry = query_entries[fq.entry_index]
+                entry["current_sql"] = repair.sql
+                entry["repair_attempt"] += 1
+                any_repaired = True
+            else:
+                # Repair failed or missing for this query
+                entry = query_entries[fq.entry_index]
+                results.append(
+                    QueryExecutionResult(
+                        query_id=entry["query_id"],
+                        status="execution_failed",
+                        sql=entry["current_sql"],
+                        error_message=fq.error_message,
+                    )
+                )
+                entry["completed"] = True
+
+        if not any_repaired:
+            break
 
     return results

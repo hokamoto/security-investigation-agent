@@ -82,6 +82,16 @@ def _format_session_end_message(data: dict) -> str:
     lines.append(f"  Duration: {duration:.2f}s")
     final_answer = data.get("final_answer")
     lines.append(f"  Final answer: {final_answer if final_answer else 'N/A'}")
+    sql_errors = data.get("sql_errors", [])
+    if sql_errors:
+        lines.append(f"  SQL errors ({len(sql_errors)}):")
+        for err in sql_errors:
+            repair_info = ""
+            if err.get("is_repair_attempt"):
+                repair_info = f" [repair #{err.get('repair_attempt_number', 0)}]"
+            lines.append(
+                f"    #{err.get('query_id')} round={err.get('round_number')}{repair_info}: {err.get('error_message')}"
+            )
     return "\n".join(lines)
 
 
@@ -123,15 +133,20 @@ def _format_llm_call_message(data: dict) -> str:
                 lines.append(f"  Strategy: {parsed.investigation_strategy}")
             if hasattr(parsed, "queries") and parsed.queries is not None:
                 lines.append(f"  Queries planned: {len(parsed.queries)}")
-    elif call_type == "repair":
+    elif call_type == "batch_repair":
         parent_id = data.get("parent_id")
         if parent_id:
-            lines.append(f"  Parent query: {parent_id}")
-        if parsed:
-            if hasattr(parsed, "explanation"):
-                lines.append(f"  Repair explanation: {parsed.explanation}")
-            elif isinstance(parsed, dict) and "explanation" in parsed:
-                lines.append(f"  Repair explanation: {parsed['explanation']}")
+            lines.append(f"  Parent queries: {parent_id}")
+        if parsed and isinstance(parsed, list):
+            lines.append(f"  Queries repaired: {len(parsed)}")
+            for item in parsed:
+                idx = getattr(item, "query_index", None)
+                expl = getattr(item, "explanation", None)
+                if idx is None and isinstance(item, dict):
+                    idx = item.get("query_index")
+                    expl = item.get("explanation")
+                if idx is not None and expl:
+                    lines.append(f"    [{idx}] {expl}")
 
     return "\n".join(lines)
 
@@ -304,6 +319,9 @@ class SessionLogger:
         self._total_prompt_tokens = 0
         self._total_completion_tokens = 0
         self._session_start_time: Optional[float] = None
+
+        # SQL errors accumulated during the session
+        self._sql_errors: list[dict] = []
 
         if self._enabled:
             self._init_log_file()
@@ -498,6 +516,7 @@ class SessionLogger:
             "total_prompt_tokens": self._total_prompt_tokens,
             "total_completion_tokens": self._total_completion_tokens,
             "total_duration": total_duration,
+            "sql_errors": self._sql_errors,
         }
         self._write_event(event)
 
@@ -635,6 +654,20 @@ class SessionLogger:
             parent_query_id: Original query ID for repair attempts
         """
         self._total_sql_queries += 1
+
+        if not success and error_message:
+            self._sql_errors.append(
+                {
+                    "query_id": query_id,
+                    "round_number": self._round_number,
+                    "purpose": purpose,
+                    "sql": sql_executed,
+                    "error_message": error_message,
+                    "error_code": error_code,
+                    "is_repair_attempt": is_repair_attempt,
+                    "repair_attempt_number": repair_attempt_number,
+                }
+            )
 
         event = {
             "event_type": EventType.SQL_QUERY.value,
