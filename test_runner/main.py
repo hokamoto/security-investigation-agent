@@ -54,9 +54,7 @@ class TestLogger:
 
     def close(self) -> None:
         """Close the log file."""
-        self.log_console(
-            f"\nTest log ended: {datetime.now().strftime('%Y-%m-%dT%H-%M-%S')}"
-        )
+        self.log_console(f"\nTest log ended: {datetime.now().strftime('%Y-%m-%dT%H-%M-%S')}")
         self.file.close()
 
 
@@ -91,9 +89,7 @@ def load_test_cases(path: Path) -> list[TestCase]:
     return cases
 
 
-def filter_test_cases(
-    cases: Iterable[TestCase], names: list[str] | None
-) -> list[TestCase]:
+def filter_test_cases(cases: Iterable[TestCase], names: list[str] | None) -> list[TestCase]:
     if not names:
         return list(cases)
     selected = [case for case in cases if case.name in names]
@@ -177,11 +173,7 @@ def judge_answer(
 
 def is_unanswerable_text(text: str) -> bool:
     prefix = text.strip().lower()
-    return (
-        prefix.startswith("unanswerable:")
-        or prefix.startswith("forced_complete:")
-        or prefix.startswith("error:")
-    )
+    return prefix.startswith("unanswerable:") or prefix.startswith("forced_complete:") or prefix.startswith("error:")
 
 
 def summarize_stats(name: str, stats: TestStats) -> str:
@@ -192,16 +184,11 @@ def summarize_stats(name: str, stats: TestStats) -> str:
         avg = sum(stats.durations) / len(stats.durations)
         max_time = max(stats.durations)
     pass_rate = (stats.passes / stats.runs) if stats.runs else 0.0
-    return (
-        f"{name}: pass_rate={pass_rate:.2%}, "
-        f"avg_time={avg:.2f}s, max_time={max_time:.2f}s"
-    )
+    return f"{name}: pass_rate={pass_rate:.2%}, avg_time={avg:.2f}s, max_time={max_time:.2f}s"
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Test runner for SIEM agent using LLM-as-a-judge."
-    )
+    parser = argparse.ArgumentParser(description="Test runner for SIEM agent using LLM-as-a-judge.")
     parser.add_argument(
         "--tests",
         nargs="+",
@@ -230,9 +217,7 @@ def main() -> None:
     logger = TestLogger(TEST_RESULTS_DIR)
 
     try:
-        stats_by_name: dict[str, TestStats] = {
-            case.name: TestStats() for case in selected_cases
-        }
+        stats_by_name: dict[str, TestStats] = {case.name: TestStats() for case in selected_cases}
 
         for case in selected_cases:
             for run_idx in range(args.runs):
@@ -253,10 +238,7 @@ def main() -> None:
                             "answer": "",
                             "acceptance_criteria": list(case.acceptance_criteria),
                             "result": "FAIL",
-                            "reason": (
-                                f"agent_error returncode={agent_result.returncode}, "
-                                f"stderr={agent_result.stderr.strip()}"
-                            ),
+                            "reason": (f"agent_error returncode={agent_result.returncode}, stderr={agent_result.stderr.strip()}"),
                             "agent_duration": agent_result.duration,
                             "judge_duration": None,
                             "total_duration": agent_result.duration,
@@ -270,10 +252,7 @@ def main() -> None:
 
                 actual_answer = agent_result.final_answer
                 if not actual_answer:
-                    reason = (
-                        f"FAIL {case.name} (run {run_idx + 1}/{args.runs}): "
-                        "empty answer from agent"
-                    )
+                    reason = f"FAIL {case.name} (run {run_idx + 1}/{args.runs}): empty answer from agent"
                     logger.log_console(reason)
                     logger.log_result(
                         {
@@ -330,10 +309,7 @@ def main() -> None:
                             }
                         )
                     else:
-                        reason = (
-                            f"FAIL {case.name} (run {run_idx + 1}/{args.runs}): "
-                            f"{result.reason}"
-                        )
+                        reason = f"FAIL {case.name} (run {run_idx + 1}/{args.runs}): {result.reason}"
                         logger.log_console(reason)
                         logger.log_result(
                             {
@@ -356,10 +332,7 @@ def main() -> None:
                     stats = stats_by_name[case.name]
                     stats.runs += 1
                     stats.durations.append(total_duration)
-                    reason = (
-                        f"FAIL {case.name} (run {run_idx + 1}/{args.runs}): "
-                        f"judge_error {exc}"
-                    )
+                    reason = f"FAIL {case.name} (run {run_idx + 1}/{args.runs}): judge_error {exc}"
                     logger.log_console(reason)
                     logger.log_result(
                         {
@@ -389,25 +362,29 @@ def main() -> None:
             total_passes += stats.passes
             all_durations.extend(stats.durations)
             pass_rate = (stats.passes / stats.runs) if stats.runs else 0.0
-            per_test_stats.append({
-                "test_name": case.name,
-                "runs": stats.runs,
-                "passes": stats.passes,
-                "pass_rate": pass_rate,
-                "avg_duration": (sum(stats.durations) / len(stats.durations)) if stats.durations else 0.0,
-                "max_duration": max(stats.durations) if stats.durations else 0.0,
-            })
+            per_test_stats.append(
+                {
+                    "test_name": case.name,
+                    "runs": stats.runs,
+                    "passes": stats.passes,
+                    "pass_rate": pass_rate,
+                    "avg_duration": (sum(stats.durations) / len(stats.durations)) if stats.durations else 0.0,
+                    "max_duration": max(stats.durations) if stats.durations else 0.0,
+                }
+            )
 
         overall_pass_rate = (total_passes / total_runs) if total_runs else 0.0
-        logger.log_summary({
-            "total_runs": total_runs,
-            "total_passes": total_passes,
-            "total_failures": total_runs - total_passes,
-            "overall_pass_rate": overall_pass_rate,
-            "avg_duration": (sum(all_durations) / len(all_durations)) if all_durations else 0.0,
-            "max_duration": max(all_durations) if all_durations else 0.0,
-            "per_test": per_test_stats,
-        })
+        logger.log_summary(
+            {
+                "total_runs": total_runs,
+                "total_passes": total_passes,
+                "total_failures": total_runs - total_passes,
+                "overall_pass_rate": overall_pass_rate,
+                "avg_duration": (sum(all_durations) / len(all_durations)) if all_durations else 0.0,
+                "max_duration": max(all_durations) if all_durations else 0.0,
+                "per_test": per_test_stats,
+            }
+        )
     finally:
         logger.close()
 

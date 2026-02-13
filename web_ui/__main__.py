@@ -18,7 +18,7 @@ def main():
     init_db()
 
     # Ensure results directory exists
-    CONFIG['results_dir'].mkdir(parents=True, exist_ok=True)
+    CONFIG["results_dir"].mkdir(parents=True, exist_ok=True)
 
     print("SIEM Web Frontend starting...")
     print(f"Database: {CONFIG['db_path']}")
@@ -28,8 +28,8 @@ def main():
 
     # Start server
     app.run(
-        host=CONFIG['host'],
-        port=CONFIG['port'],
+        host=CONFIG["host"],
+        port=CONFIG["port"],
         debug=False,  # Enable debug mode (disables template cache, shows detailed errors)
         reloader=False,  # Disable auto-reload (causes double process)
     )

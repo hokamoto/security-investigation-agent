@@ -15,6 +15,7 @@ from siem_agent.baml_client import b
 from siem_agent.baml_client.types import InvestigationPlan, ReplanDecisionType
 from siem_agent.clickhouse import ClickHouseClient
 from siem_agent.execute import QueryExecutionResult, execute_investigation_plan
+from siem_agent.language_detect import is_english
 from siem_agent.session_logger import create_session_logger
 from siem_agent.sql_utils import normalize_clickhouse_array_functions
 from siem_agent.synthesize import synthesize_and_replan
@@ -102,11 +103,7 @@ def generate_investigation_plan(state: AgentState) -> InvestigationPlan:
             "current_replanning_round": state.current_replanning_round,
             "max_replanning_rounds": state.max_replanning_rounds,
         }
-        error_msg = (
-            f"LLM determined the question is unanswerable.\n"
-            f"  Reason: {parsed.unanswerable_reason}\n"
-            f"  User question: {state.user_question}"
-        )
+        error_msg = f"LLM determined the question is unanswerable.\n  Reason: {parsed.unanswerable_reason}\n  User question: {state.user_question}"
         state.session_logger.log_error(
             ValueError(error_msg),
             context=f"Question deemed unanswerable: {error_context}",
@@ -181,17 +178,13 @@ def _build_round_dict(
     Returns:
         Dict with round metadata, planned/executed queries, synthesis, and decision
     """
-    planned_queries = [
-        {"purpose": q.purpose, "sql": q.sql} for q in (plan.queries or [])
-    ]
+    planned_queries = [{"purpose": q.purpose, "sql": q.sql} for q in (plan.queries or [])]
 
     executed_queries = []
     for i, er in enumerate(execution_results):
         entry = {
             "query_id": er.query_id,
-            "purpose": plan.queries[i].purpose
-            if plan.queries and i < len(plan.queries)
-            else "",
+            "purpose": plan.queries[i].purpose if plan.queries and i < len(plan.queries) else "",
             "sql": er.sql,
             "success": er.status == "ok",
             "row_count": er.row_count,
@@ -275,11 +268,7 @@ def run_investigation_loop(state: AgentState, json_mode: bool = False) -> str:
             result = synthesize_and_replan(state)
 
         # Determine decision string for logging
-        decision_str = (
-            result.decision.value
-            if hasattr(result.decision, "value")
-            else str(result.decision)
-        )
+        decision_str = result.decision.value if hasattr(result.decision, "value") else str(result.decision)
 
         # Log round end
         state.session_logger.log_round_end(
@@ -303,6 +292,8 @@ def run_investigation_loop(state: AgentState, json_mode: bool = False) -> str:
 
         # Step 4: Act based on decision
         if result.decision == ReplanDecisionType.COMPLETE:
+            state.supporting_data = result.supporting_data or ""
+            state.data_gaps = result.data_gaps or ""
             final_answer = result.final_answer or "No final answer provided."
             if not json_mode:
                 print("Questions:")
@@ -321,9 +312,7 @@ def run_investigation_loop(state: AgentState, json_mode: bool = False) -> str:
                 # Output forced completion information
                 if not json_mode:
                     print("\n" + "=" * 80)
-                    print(
-                        "WARNING: Investigation terminated - maximum replanning rounds reached"
-                    )
+                    print("WARNING: Investigation terminated - maximum replanning rounds reached")
                     print("=" * 80)
                     print(f"\nMaximum rounds: {state.max_replanning_rounds}")
                     print(f"Rounds executed: {state.current_replanning_round}")
@@ -361,9 +350,7 @@ def run_investigation_loop(state: AgentState, json_mode: bool = False) -> str:
                 # No queries provided despite CONTINUE - force completion
                 if not json_mode:
                     print("\n" + "=" * 80)
-                    print(
-                        "WARNING: Investigation terminated - no replan queries generated"
-                    )
+                    print("WARNING: Investigation terminated - no replan queries generated")
                     print("=" * 80)
 
                     print("\n--- What Has Been Discovered ---")
@@ -371,9 +358,7 @@ def run_investigation_loop(state: AgentState, json_mode: bool = False) -> str:
 
                     print("\n--- Unresolved Issues (Why Continuation Was Needed) ---")
                     print(result.decision_rationale)
-                    print(
-                        "\n(Note: LLM selected CONTINUE but failed to generate follow-up queries)"
-                    )
+                    print("\n(Note: LLM selected CONTINUE but failed to generate follow-up queries)")
 
                     print("\n" + "=" * 80 + "\n")
 
@@ -386,12 +371,8 @@ def run_investigation_loop(state: AgentState, json_mode: bool = False) -> str:
 def main():
     """Run the SIEM Agent investigation workflow."""
     # Parse command-line arguments
-    parser = argparse.ArgumentParser(
-        description="SIEM Agent - Investigate security questions using Akamai SIEM/CDN logs"
-    )
-    parser.add_argument(
-        "question", type=str, help="Security investigation question to answer"
-    )
+    parser = argparse.ArgumentParser(description="SIEM Agent - Investigate security questions using Akamai SIEM/CDN logs")
+    parser.add_argument("question", type=str, help="Security investigation question to answer")
     parser.add_argument(
         "--json",
         action="store_true",
@@ -406,9 +387,7 @@ def main():
     config = load_config()
 
     # Get current timestamp for session
-    session_timestamp = (
-        datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
-    )
+    session_timestamp = datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
     # Initialize session logger
     session_logger = create_session_logger(config, session_timestamp)
@@ -428,13 +407,33 @@ def main():
         with session_logger.timed_event() as discovery_timer:
             available_hosts, available_rule_tags = ch_client.discover_hosts_and_tags()
 
-        session_logger.log_discovery(
-            available_hosts, available_rule_tags, discovery_timer.duration
-        )
+        session_logger.log_discovery(available_hosts, available_rule_tags, discovery_timer.duration)
 
         if not available_hosts:
             outcome = "error"
             return
+
+        # Language detection and translation
+        original_language = "English"
+        if not is_english(user_question):
+            req = b.request.TranslateQuestion(user_question=user_question)
+            with session_logger.timed_event() as translate_timer:
+                res = requests.post(url=req.url, headers=req.headers, json=req.body.json())
+                response_json = res.json()
+            raw_content = response_json["choices"][0]["message"]["content"]
+            translation = b.parse.TranslateQuestion(raw_content)
+            original_language = translation.original_language
+            user_question = translation.translated_question
+
+            prompt_full = _extract_prompt_from_request(req)
+            session_logger.log_llm_call(
+                call_type="translate",
+                prompt_full=prompt_full,
+                raw_response=raw_content,
+                parsed_response=translation,
+                response_json=response_json,
+                duration=translate_timer.duration,
+            )
 
         # Initialize agent state with session logger
         state = AgentState(
@@ -446,6 +445,7 @@ def main():
             user_question=user_question,
             current_replanning_round=0,
             debug=False,
+            original_language=original_language,
             session_logger=session_logger,
         )
 
@@ -507,6 +507,8 @@ def main():
                 "session_start_timestamp": session_timestamp,
                 "user_question": user_question,
                 "final_answer": final_answer,
+                "supporting_data": state.supporting_data if state.supporting_data else None,
+                "data_gaps": state.data_gaps if state.data_gaps else None,
                 "investigation_log": investigation_log,
                 "duration": session_logger.get_total_duration(),
                 "total_rounds": session_logger.get_total_rounds(),

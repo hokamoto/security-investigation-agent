@@ -40,7 +40,7 @@ shutdown_requested = False
 
 def load_agent_config() -> dict:
     """Load SIEM agent config from project config.yaml."""
-    config_path = Path(CONFIG['project_root']) / "config.yaml"
+    config_path = Path(CONFIG["project_root"]) / "config.yaml"
     with open(config_path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
@@ -67,32 +67,28 @@ def execute_job(job_id: str, question: str) -> None:
     print(f"[{job_id[:8]}] Starting job: {question[:60]}...")
 
     # Prepare result directory
-    result_dir = CONFIG['results_dir'] / job_id
+    result_dir = CONFIG["results_dir"] / job_id
     result_dir.mkdir(parents=True, exist_ok=True)
     result_path = result_dir / "output.json"
     stdout_path = result_dir / "stdout.txt"
     stderr_path = result_dir / "stderr.txt"
 
     # Build command. Current SIEM agent writes JSON to stdout when --json is provided.
-    cmd = [
-        "uv", "run", "-m", "siem_agent",
-        "--json",
-        question
-    ]
+    cmd = ["uv", "run", "-m", "siem_agent", "--json", question]
 
     try:
         # Execute with timeout
         process = subprocess.run(
             cmd,
-            cwd=str(CONFIG['project_root']),
+            cwd=str(CONFIG["project_root"]),
             capture_output=True,
-            encoding='utf-8',
-            timeout=CONFIG['job_timeout_seconds'],
+            encoding="utf-8",
+            timeout=CONFIG["job_timeout_seconds"],
         )
 
         # Save stdout/stderr regardless of exit code
-        stdout_path.write_text(process.stdout, encoding='utf-8')
-        stderr_path.write_text(process.stderr, encoding='utf-8')
+        stdout_path.write_text(process.stdout, encoding="utf-8")
+        stderr_path.write_text(process.stderr, encoding="utf-8")
 
         if process.returncode != 0:
             error_msg = process.stderr or f"Process exited with code {process.returncode}"
@@ -111,13 +107,13 @@ def execute_job(job_id: str, question: str) -> None:
 
         result_path.write_text(
             json.dumps(result_payload, ensure_ascii=False, indent=2),
-            encoding='utf-8',
+            encoding="utf-8",
         )
         mark_completed(job_id, str(result_path))
         print(f"[{job_id[:8]}] Completed successfully")
 
     except subprocess.TimeoutExpired:
-        timeout = CONFIG['job_timeout_seconds']
+        timeout = CONFIG["job_timeout_seconds"]
         error_msg = f"Job timed out after {timeout} seconds"
         mark_failed(job_id, error_msg)
         print(f"[{job_id[:8]}] {error_msg}")
@@ -125,7 +121,7 @@ def execute_job(job_id: str, question: str) -> None:
         # Save partial output if exists
         if result_path.exists():
             try:
-                stderr_path.write_text(f"TIMEOUT: {error_msg}\n", encoding='utf-8')
+                stderr_path.write_text(f"TIMEOUT: {error_msg}\n", encoding="utf-8")
             except Exception:
                 pass
 
@@ -144,12 +140,12 @@ def refresh_available_hosts() -> None:
         with ClickHouseClient(config=agent_config) as ch_client:
             hosts, _ = ch_client.discover_hosts_and_tags()
 
-        updated_at = datetime.now(UTC).isoformat().replace('+00:00', 'Z')
+        updated_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         replace_available_hosts(hosts, updated_at)
         print(f"[hosts] Refreshed {len(hosts)} hosts")
     except Exception as e:
         error_msg = f"Available hosts refresh failed: {e}"
-        error_at = datetime.now(UTC).isoformat().replace('+00:00', 'Z')
+        error_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         set_available_hosts_error(error_msg[:300], error_at)
         print(f"[hosts] {error_msg}")
 
@@ -183,7 +179,7 @@ def main_loop() -> None:
     def available_hosts_loop() -> None:
         while not shutdown_requested:
             refresh_available_hosts()
-            time.sleep(CONFIG['available_hosts_refresh_seconds'])
+            time.sleep(CONFIG["available_hosts_refresh_seconds"])
 
     hosts_thread = threading.Thread(target=available_hosts_loop, daemon=True)
     hosts_thread.start()
@@ -206,7 +202,7 @@ def main_loop() -> None:
                     print(f"Cleaned up {deleted} old job(s)")
                 cleanup_counter = 0
 
-            time.sleep(CONFIG['worker_poll_seconds'])
+            time.sleep(CONFIG["worker_poll_seconds"])
 
     print("Worker shutdown complete")
 

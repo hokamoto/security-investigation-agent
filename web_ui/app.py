@@ -15,7 +15,17 @@ import traceback
 from pathlib import Path
 from typing import Dict, Any, Optional
 
-from bottle import Bottle, request, response, redirect, abort, template, TEMPLATE_PATH, TEMPLATES, HTTPResponse
+from bottle import (
+    Bottle,
+    request,
+    response,
+    redirect,
+    abort,
+    template,
+    TEMPLATE_PATH,
+    TEMPLATES,
+    HTTPResponse,
+)
 
 from .config import CONFIG
 from .db import (
@@ -29,14 +39,11 @@ from .db import (
 )
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 # Configure template path
-TEMPLATE_PATH.insert(0, str(Path(__file__).parent / 'templates'))
+TEMPLATE_PATH.insert(0, str(Path(__file__).parent / "templates"))
 
 # Clear template cache to ensure changes are loaded
 TEMPLATES.clear()
@@ -44,18 +51,20 @@ TEMPLATES.clear()
 # Create Bottle app
 app = Bottle()
 
+
 # Force UTF-8 decoding for incoming form data.
-@app.hook('before_request')
+@app.hook("before_request")
 def force_request_utf8():
-    request.charset = 'utf-8'
+    request.charset = "utf-8"
+
 
 # Set default encoding for responses
-@app.hook('after_request')
+@app.hook("after_request")
 def enable_utf8():
     """Set UTF-8 encoding for all responses."""
-    if response.content_type.startswith('text/'):
-        if 'charset' not in response.content_type:
-            response.content_type += '; charset=utf-8'
+    if response.content_type.startswith("text/"):
+        if "charset" not in response.content_type:
+            response.content_type += "; charset=utf-8"
 
 
 def load_job_result(result_path: str) -> Optional[Dict[str, Any]]:
@@ -69,7 +78,7 @@ def load_job_result(result_path: str) -> Optional[Dict[str, Any]]:
         Parsed JSON dict or None if file doesn't exist.
     """
     try:
-        with open(result_path, 'r', encoding='utf-8') as f:
+        with open(result_path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return None
@@ -85,10 +94,10 @@ def has_pending_or_running_jobs(jobs: list) -> bool:
     Returns:
         True if auto-refresh should be enabled.
     """
-    return any(job['status'] in ('pending', 'running') for job in jobs)
+    return any(job["status"] in ("pending", "running") for job in jobs)
 
 
-@app.route('/')
+@app.route("/")
 def index():
     """
     Home page with job submission form and recent jobs list.
@@ -98,12 +107,12 @@ def index():
     available_hosts_data = get_available_hosts()
 
     # Add refresh meta tag if needed
-    head_extra = ''
+    head_extra = ""
     if needs_refresh:
         head_extra = '<meta http-equiv="refresh" content="10">'
 
     return template(
-        'index',
+        "index",
         jobs=jobs,
         head_extra=head_extra,
         available_hosts=available_hosts_data.get("hosts", []),
@@ -113,7 +122,7 @@ def index():
     )
 
 
-@app.route('/jobs', method='POST')
+@app.route("/jobs", method="POST")
 def submit_job():
     """
     Submit a new job.
@@ -127,7 +136,7 @@ def submit_job():
         429 if queue is full.
     """
     try:
-        question = request.forms.getunicode('question', '').strip()
+        question = request.forms.getunicode("question", "").strip()
         logger.info(f"Received job submission: {question[:100]}")
 
         # Validate question
@@ -139,7 +148,7 @@ def submit_job():
         pending_count = count_pending_jobs()
         logger.info(f"Current pending jobs: {pending_count}/{CONFIG['max_pending_jobs']}")
 
-        if pending_count >= CONFIG['max_pending_jobs']:
+        if pending_count >= CONFIG["max_pending_jobs"]:
             logger.warning("Job submission rejected: queue full")
             abort(429, "Too many pending jobs. Please try again later.")
 
@@ -147,7 +156,7 @@ def submit_job():
         job_id = create_job(question)
         logger.info(f"Job created successfully: {job_id}")
 
-        return redirect(f'/jobs/{job_id}', code=303)
+        return redirect(f"/jobs/{job_id}", code=303)
 
     except HTTPResponse:
         raise  # Re-raise redirect/abort responses
@@ -157,7 +166,7 @@ def submit_job():
         abort(500, f"Internal server error: {str(e)}")
 
 
-@app.route('/jobs/<job_id>')
+@app.route("/jobs/<job_id>")
 def job_detail(job_id):
     """
     Job detail page.
@@ -168,24 +177,24 @@ def job_detail(job_id):
     if not job:
         abort(404, "Job not found")
 
-    status = job['status']
-    head_extra = ''
+    status = job["status"]
+    head_extra = ""
     result_data = None
     queue_position = None
 
     # Auto-refresh for pending/running jobs
-    if status in ('pending', 'running'):
+    if status in ("pending", "running"):
         head_extra = '<meta http-equiv="refresh" content="5">'
 
-        if status == 'pending':
+        if status == "pending":
             queue_position = get_pending_position(job_id)
 
     # Load result for completed jobs
-    if status == 'completed' and job['result_path']:
-        result_data = load_job_result(job['result_path'])
+    if status == "completed" and job["result_path"]:
+        result_data = load_job_result(job["result_path"])
 
     return template(
-        'job_detail',
+        "job_detail",
         job=job,
         result_data=result_data,
         queue_position=queue_position,
@@ -193,7 +202,7 @@ def job_detail(job_id):
     )
 
 
-@app.route('/jobs/<job_id>/delete', method='POST')
+@app.route("/jobs/<job_id>/delete", method="POST")
 def delete_job_route(job_id):
     """
     Delete a job and its result files.
@@ -208,12 +217,12 @@ def delete_job_route(job_id):
         if not job:
             abort(404, "Job not found")
 
-        if job['status'] == 'running':
+        if job["status"] == "running":
             abort(409, "Cannot delete running job")
 
         # Delete result files
-        if job['result_path']:
-            result_dir = Path(job['result_path']).parent
+        if job["result_path"]:
+            result_dir = Path(job["result_path"]).parent
             if result_dir.exists():
                 try:
                     shutil.rmtree(result_dir)
@@ -224,7 +233,7 @@ def delete_job_route(job_id):
         delete_job(job_id)
         logger.info(f"Job deleted: {job_id}")
 
-        return redirect('/', code=303)
+        return redirect("/", code=303)
 
     except HTTPResponse:
         raise  # Re-raise redirect/abort responses
@@ -238,31 +247,31 @@ def delete_job_route(job_id):
 @app.error(400)
 def error400(err):
     message = str(err.body) if err.body else "Bad request"
-    return template('error', code=400, message=message, title="Bad Request")
+    return template("error", code=400, message=message, title="Bad Request")
 
 
 @app.error(404)
 def error404(err):
     message = str(err.body) if err.body else "The requested page was not found"
-    return template('error', code=404, message=message, title="Not Found")
+    return template("error", code=404, message=message, title="Not Found")
 
 
 @app.error(409)
 def error409(err):
     message = str(err.body) if err.body else "Conflict"
-    return template('error', code=409, message=message, title="Conflict")
+    return template("error", code=409, message=message, title="Conflict")
 
 
 @app.error(429)
 def error429(err):
     message = str(err.body) if err.body else "Too many requests"
-    return template('error', code=429, message=message, title="Too Many Requests")
+    return template("error", code=429, message=message, title="Too Many Requests")
 
 
 @app.error(500)
 def error500(err):
     logger.error(f"500 error: {err}")
-    if hasattr(err, 'traceback'):
+    if hasattr(err, "traceback"):
         logger.error(err.traceback)
     message = str(err.body) if err.body else "Internal server error"
-    return template('error', code=500, message=message, title="Error")
+    return template("error", code=500, message=message, title="Error")

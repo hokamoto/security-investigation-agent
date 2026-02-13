@@ -43,6 +43,20 @@
             <div class="answer">{{result_data.get('final_answer', 'No answer available')}}</div>
         </div>
 
+        % if result_data.get('supporting_data'):
+        <div class="card">
+            <h2>Supporting Data</h2>
+            <div class="answer">{{result_data['supporting_data']}}</div>
+        </div>
+        % end
+
+        % if result_data.get('data_gaps'):
+        <div class="card">
+            <h2>Data Gaps</h2>
+            <div class="answer">{{result_data['data_gaps']}}</div>
+        </div>
+        % end
+
         % investigation_log = result_data.get('investigation_log', [])
         % if investigation_log:
         <details>

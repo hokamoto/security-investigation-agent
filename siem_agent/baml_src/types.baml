@@ -74,6 +74,8 @@ class SynthesizeAndReplanResult {
 
   // Step 4a: COMPLETE - final answer
   final_answer string? @description("Answer to the user question (use <fact> tags for numerical values and IP addresses only). Required when decision=COMPLETE")
+  supporting_data string? @description("Key data points and evidence supporting the final answer. Required when decision=COMPLETE")
+  data_gaps string? @description("Facts that could not be clearly established due to insufficient data. Required when decision=COMPLETE")
 
   // Step 4b: CONTINUE - replan
   replan ReplanResult? @description("Follow-up queries. Required when decision=CONTINUE")

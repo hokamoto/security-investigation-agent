@@ -73,10 +73,7 @@ def _format_session_end_message(data: dict) -> str:
     lines.append(f"  Rounds: {data.get('total_rounds', 0)}")
     prompt_tokens = data.get("total_prompt_tokens", 0)
     completion_tokens = data.get("total_completion_tokens", 0)
-    lines.append(
-        f"  LLM calls: {data.get('total_llm_calls', 0)} "
-        f"({prompt_tokens} prompt + {completion_tokens} completion tokens)"
-    )
+    lines.append(f"  LLM calls: {data.get('total_llm_calls', 0)} ({prompt_tokens} prompt + {completion_tokens} completion tokens)")
     lines.append(f"  SQL queries: {data.get('total_sql_queries', 0)}")
     duration = data.get("total_duration", 0)
     lines.append(f"  Duration: {duration:.2f}s")
@@ -89,9 +86,7 @@ def _format_session_end_message(data: dict) -> str:
             repair_info = ""
             if err.get("is_repair_attempt"):
                 repair_info = f" [repair #{err.get('repair_attempt_number', 0)}]"
-            lines.append(
-                f"    #{err.get('query_id')} round={err.get('round_number')}{repair_info}: {err.get('error_message')}"
-            )
+            lines.append(f"    #{err.get('query_id')} round={err.get('round_number')}{repair_info}: {err.get('error_message')}")
     return "\n".join(lines)
 
 
@@ -164,9 +159,7 @@ def _format_sql_query_message(data: dict) -> str:
 
     if is_repair:
         status = "succeeded" if success else "failed"
-        lines = [
-            f"SQL query #{query_id} repair attempt #{repair_num} {status} (round {round_number})"
-        ]
+        lines = [f"SQL query #{query_id} repair attempt #{repair_num} {status} (round {round_number})"]
     else:
         status = "succeeded" if success else "failed"
         lines = [f"SQL query #{query_id} {status} (round {round_number})"]
@@ -199,11 +192,7 @@ def _format_round_start_message(data: dict) -> str:
     lines.append(f"  Strategy: {strategy}")
     lines.append(f"  Planned queries ({count}):")
     for i, q in enumerate(planned_queries, 1):
-        purpose = (
-            q.get("purpose", "N/A")
-            if isinstance(q, dict)
-            else getattr(q, "purpose", "N/A")
-        )
+        purpose = q.get("purpose", "N/A") if isinstance(q, dict) else getattr(q, "purpose", "N/A")
         lines.append(f"    {i}. {purpose}")
     return "\n".join(lines)
 
@@ -338,9 +327,7 @@ class SessionLogger:
         try:
             self._file = open(log_path, "w", encoding="utf-8")
         except Exception as e:
-            print(
-                f"WARNING: Failed to create log file {log_path}: {e}", file=sys.stderr
-            )
+            print(f"WARNING: Failed to create log file {log_path}: {e}", file=sys.stderr)
             self._enabled = False
 
     def _write_event(self, event: dict):
@@ -365,11 +352,7 @@ class SessionLogger:
                 timestamp = event.get("timestamp", "")
 
                 # Build data dict with remaining fields
-                data = {
-                    k: v
-                    for k, v in event.items()
-                    if k not in ("event_type", "timestamp")
-                }
+                data = {k: v for k, v in event.items() if k not in ("event_type", "timestamp")}
 
                 # Generate human-readable message
                 formatter = _MESSAGE_FORMATTERS.get(event_type)
@@ -706,9 +689,7 @@ class SessionLogger:
             "timestamp": self._current_timestamp(),
             "round_number": self._round_number,
             "planned_query_count": len(planned_queries),
-            "planned_queries": [
-                {"purpose": q.purpose, "sql": q.sql} for q in planned_queries
-            ],
+            "planned_queries": [{"purpose": q.purpose, "sql": q.sql} for q in planned_queries],
             "strategy": strategy,
         }
         self._write_event(event)

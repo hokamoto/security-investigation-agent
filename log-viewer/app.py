@@ -10,12 +10,11 @@ Usage:
 
 import argparse
 import json
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from bottle import Bottle, request, response, abort
+from bottle import Bottle, response, abort
 
 app = Bottle()
 
@@ -676,13 +675,10 @@ def get_filters_html() -> str:
         "sql_query",
         "round_start",
         "round_end",
-        "error"
+        "error",
     ]
 
-    checkboxes_html = '\n'.join([
-        f'<label><input type="checkbox" class="event-type-filter" value="{et}"> {et}</label>'
-        for et in event_types
-    ])
+    checkboxes_html = "\n".join([f'<label><input type="checkbox" class="event-type-filter" value="{et}"> {et}</label>' for et in event_types])
 
     return f"""
     <div class="filters">
@@ -708,15 +704,15 @@ def get_filters_html() -> str:
 
 def generate_header_html(metadata: dict[str, Any], show_back_link: bool = False) -> str:
     """Generate header section HTML."""
-    back_link = '<a href="/" class="back-link">&larr; Back to Log List</a>' if show_back_link else ''
+    back_link = '<a href="/" class="back-link">&larr; Back to Log List</a>' if show_back_link else ""
     return f"""
     <div class="header">
         {back_link}
         <h1><a href="/">Session Log Viewer</a></h1>
         <div class="metadata">
-            <div><strong>Session ID:</strong> {metadata['session_id']}</div>
-            <div><strong>Timestamp:</strong> {metadata['timestamp']}</div>
-            <div><strong>User Question:</strong> {metadata['user_question']}</div>
+            <div><strong>Session ID:</strong> {metadata["session_id"]}</div>
+            <div><strong>Timestamp:</strong> {metadata["timestamp"]}</div>
+            <div><strong>User Question:</strong> {metadata["user_question"]}</div>
         </div>
     </div>
     """
@@ -735,30 +731,30 @@ def generate_summary_html(summary: dict[str, Any] | None) -> str:
         <div class="summary-grid">
             <div class="summary-item">
                 <div class="summary-label">Outcome</div>
-                <div class="summary-value">{summary['outcome']}</div>
+                <div class="summary-value">{summary["outcome"]}</div>
             </div>
             <div class="summary-item">
                 <div class="summary-label">Total Rounds</div>
-                <div class="summary-value">{summary['total_rounds']}</div>
+                <div class="summary-value">{summary["total_rounds"]}</div>
             </div>
             <div class="summary-item">
                 <div class="summary-label">LLM Calls</div>
-                <div class="summary-value">{summary['total_llm_calls']}</div>
+                <div class="summary-value">{summary["total_llm_calls"]}</div>
             </div>
             <div class="summary-item">
                 <div class="summary-label">SQL Queries</div>
-                <div class="summary-value">{summary['total_sql_queries']}</div>
+                <div class="summary-value">{summary["total_sql_queries"]}</div>
             </div>
             <div class="summary-item">
                 <div class="summary-label">Tokens</div>
-                <div class="summary-value">{summary['total_prompt_tokens']} prompt + {summary['total_completion_tokens']} completion</div>
+                <div class="summary-value">{summary["total_prompt_tokens"]} prompt + {summary["total_completion_tokens"]} completion</div>
             </div>
             <div class="summary-item">
                 <div class="summary-label">Duration</div>
-                <div class="summary-value">{summary['total_duration']:.2f}s</div>
+                <div class="summary-value">{summary["total_duration"]:.2f}s</div>
             </div>
         </div>
-        {f'<div class="final-answer"><strong>Final Answer:</strong> {final_answer}</div>' if final_answer else ''}
+        {f'<div class="final-answer"><strong>Final Answer:</strong> {final_answer}</div>' if final_answer else ""}
     </div>
     """
 
@@ -838,14 +834,14 @@ def index():
             question_preview = log["user_question"][:100] + "..." if len(log["user_question"]) > 100 else log["user_question"]
 
             item_html = f"""
-            <a href="/view/{log['filename']}" class="log-item">
+            <a href="/view/{log["filename"]}" class="log-item">
                 <div class="log-item-header">
-                    <span class="log-item-filename">{log['filename']}</span>
-                    <span class="outcome-badge {outcome_class}">{log['outcome']}</span>
+                    <span class="log-item-filename">{log["filename"]}</span>
+                    <span class="outcome-badge {outcome_class}">{log["outcome"]}</span>
                 </div>
                 <div class="log-item-meta">
-                    <span>{log['created']}</span>
-                    <span>{format_file_size(log['size'])}</span>
+                    <span>{log["created"]}</span>
+                    <span>{format_file_size(log["size"])}</span>
                 </div>
                 <div class="log-item-question">{question_preview}</div>
             </a>
@@ -909,7 +905,7 @@ def view_log(filename: str):
             "event_type": event.get("event_type"),
             "timestamp": event.get("timestamp"),
             "message": event.get("message", ""),
-            "data": prepare_event_data(event)
+            "data": prepare_event_data(event),
         }
         prepared_events.append(prepared_event)
 
@@ -926,7 +922,7 @@ def view_log(filename: str):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Session Log Viewer - {metadata['session_id']}</title>
+    <title>Session Log Viewer - {metadata["session_id"]}</title>
     <style>{css_styles}</style>
 </head>
 <body>
@@ -965,27 +961,20 @@ def view_log(filename: str):
 
 def main():
     """Entry point."""
-    parser = argparse.ArgumentParser(
-        description="Session Log Viewer Web Application"
-    )
+    parser = argparse.ArgumentParser(description="Session Log Viewer Web Application")
     parser.add_argument(
         "--port",
         type=int,
         default=8081,
-        help="Port to run the server on (default: 8080)"
+        help="Port to run the server on (default: 8080)",
     )
     parser.add_argument(
         "--logs-dir",
         type=str,
         default="../logs",
-        help="Directory containing log files (default: ../logs)"
+        help="Directory containing log files (default: ../logs)",
     )
-    parser.add_argument(
-        "--host",
-        type=str,
-        default="0.0.0.0",
-        help="Host to bind to (default: 0.0.0.0)"
-    )
+    parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to bind to (default: 0.0.0.0)")
     args = parser.parse_args()
 
     global LOGS_DIR

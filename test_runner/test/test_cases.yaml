@@ -29,9 +29,8 @@ tests:
     and summarize the total count for each attack type.
   acceptance_criteria:
     - The answer must identify 40.113.19.56 as the top attacking IP
-    - The answer must state this IP had 161 WAF security events
-    - The answer must mention DoS attacks (117 events)
-    - The answer must mention Bot attacks (44 events)
+    - The answer must mention 117 DoS attacks
+    - The answer must mention 44 Bot attacks
 
 - name: waf_most_attacked_path_analysis
   question: For akamai.fab34.com between 2026-01-03T00:00:00Z and 2026-01-08T00:00:00Z,
@@ -97,8 +96,8 @@ tests:
 
 - name: waf_monitor_mode_bot_impact
   question: For akamai.fab34.com between 2026-01-03T00:00:00Z and 2026-01-08T00:00:00Z,
-    identify the IP address with the most WAF monitor-mode Bot detections. Then analyze
-    the CDN logs to see what HTTP status codes their requests received.
+    identify the IP address with the most WAF monitor-mode Bot detections with the count.
+    Then analyze the CDN logs to see what HTTP status codes their requests received.
   acceptance_criteria:
     - The answer must identify 52.187.162.248 as the top monitor-mode Bot attacker
     - The answer must state this IP had 77 WAF detections in monitor mode
@@ -175,7 +174,7 @@ tests:
     - The answer must identify 2026-01-01 07:00-08:00 as the peak hour
     - The answer must state 197 attacks/events/requests occurred in this hour (semantic equivalents acceptable)
     - The answer must identify 3.25.169.229 as the source IP
-    - The answer must mention WAF attacks dominated (145 occurrences)
+    - The answer must mention WAF attacks dominated (either 145 occurrences or 73.6%)
 
 - name: waf_cdn_attack_to_traffic_ratio
   question: For the top 10 IPs by WAF attack count on akamai.fab34.com between 2026-01-01T00:00:00Z

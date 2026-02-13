@@ -17,19 +17,29 @@ def normalize_clickhouse_array_functions(sql: str) -> str:
         SQL query with all incorrect array functions replaced with correct equivalents
     """
     # Replace arrayLength with length (case-insensitive, handles optional whitespace before '(')
-    sql = re.sub(r'\barrayLength\s*\(', 'length(', sql, flags=re.IGNORECASE)
-    sql = re.sub(r'\barraySize\s*\(', 'length(', sql, flags=re.IGNORECASE)
-    sql = re.sub(r'\barrayLen\s*\(', 'length(', sql, flags=re.IGNORECASE)
-    sql = re.sub(r'\bsize\s*\(', 'length(', sql, flags=re.IGNORECASE)
+    sql = re.sub(r"\barrayLength\s*\(", "length(", sql, flags=re.IGNORECASE)
+    sql = re.sub(r"\barraySize\s*\(", "length(", sql, flags=re.IGNORECASE)
+    sql = re.sub(r"\barrayLen\s*\(", "length(", sql, flags=re.IGNORECASE)
+    sql = re.sub(r"\bsize\s*\(", "length(", sql, flags=re.IGNORECASE)
 
-    sql = re.sub(r'\barrayAgg\s*\(', 'groupArray(', sql, flags=re.IGNORECASE)
-    sql = re.sub(r'\bcollect\s*\(', 'groupArray(', sql, flags=re.IGNORECASE)
+    sql = re.sub(r"\barrayAgg\s*\(", "groupArray(", sql, flags=re.IGNORECASE)
+    sql = re.sub(r"\bcollect\s*\(", "groupArray(", sql, flags=re.IGNORECASE)
 
-    sql = re.sub(r'\bcollectSet\s*\(', 'groupUniqArray(', sql, flags=re.IGNORECASE)
-    sql = re.sub(r'\bcollect_set\s*\(', 'groupUniqArray(', sql, flags=re.IGNORECASE)
+    sql = re.sub(r"\bcollectSet\s*\(", "groupUniqArray(", sql, flags=re.IGNORECASE)
+    sql = re.sub(r"\bcollect_set\s*\(", "groupUniqArray(", sql, flags=re.IGNORECASE)
 
-    sql = re.sub(r'\barrayFirst\s*\((?!\s*x\s*->\s*true)', r'arrayFirst(x -> true, ', sql, flags=re.IGNORECASE)
-    sql = re.sub(r'\barrayLast\s*\((?!\s*x\s*->\s*true)', r'arrayLast(x -> true, ', sql, flags=re.IGNORECASE)
+    sql = re.sub(
+        r"\barrayFirst\s*\((?!\s*x\s*->\s*true)",
+        r"arrayFirst(x -> true, ",
+        sql,
+        flags=re.IGNORECASE,
+    )
+    sql = re.sub(
+        r"\barrayLast\s*\((?!\s*x\s*->\s*true)",
+        r"arrayLast(x -> true, ",
+        sql,
+        flags=re.IGNORECASE,
+    )
 
     return sql
 
@@ -62,16 +72,16 @@ def apply_hdx_join_workaround(sql: str, database_name: str, siem_table: str, cdn
         Transformed SQL with subquery workaround applied (if JOIN detected)
     """
     # Normalize whitespace for easier parsing
-    sql = ' '.join(sql.split())
+    sql = " ".join(sql.split())
 
     # Check if this is a JOIN query
-    if not re.search(r'\bJOIN\b', sql, re.IGNORECASE):
+    if not re.search(r"\bJOIN\b", sql, re.IGNORECASE):
         return sql
 
     # Pattern to match JOIN clause with table and alias
     # Matches: JOIN [database.]table AS alias
     # Also matches: JOIN [database.]table (without AS keyword)
-    join_pattern = r'\bJOIN\s+(?:(\w+)\.)?(\w+)(?:\s+AS)?\s+(\w+)\s+ON\b'
+    join_pattern = r"\bJOIN\s+(?:(\w+)\.)?(\w+)(?:\s+AS)?\s+(\w+)\s+ON\b"
     join_match = re.search(join_pattern, sql, re.IGNORECASE)
 
     if not join_match:
@@ -83,9 +93,9 @@ def apply_hdx_join_workaround(sql: str, database_name: str, siem_table: str, cdn
 
     # Determine the time column based on table name
     if join_table == siem_table:
-        time_column = 'timestamp'
+        time_column = "timestamp"
     elif join_table == cdn_table:
-        time_column = 'reqTimeSec'
+        time_column = "reqTimeSec"
     else:
         # Unknown table, skip transformation
         return sql
@@ -93,12 +103,12 @@ def apply_hdx_join_workaround(sql: str, database_name: str, siem_table: str, cdn
     # Extract time filter for the right-side table from WHERE clause
     # Pattern: alias.time_column BETWEEN function(...) AND function(...)
     # Matches function calls like parseDateTimeBestEffort('...')
-    time_filter_pattern = rf'\b{re.escape(join_alias)}\.{time_column}\s+BETWEEN\s+(\w+\([^)]+\))\s+AND\s+(\w+\([^)]+\))'
+    time_filter_pattern = rf"\b{re.escape(join_alias)}\.{time_column}\s+BETWEEN\s+(\w+\([^)]+\))\s+AND\s+(\w+\([^)]+\))"
     time_match = re.search(time_filter_pattern, sql, re.IGNORECASE)
 
     if not time_match:
         # Try fully qualified name: db.table.time_column BETWEEN ...
-        fq_pattern = rf'\b{re.escape(join_db)}\.{re.escape(join_table)}\.{time_column}\s+BETWEEN\s+(\w+\([^)]+\))\s+AND\s+(\w+\([^)]+\))'
+        fq_pattern = rf"\b{re.escape(join_db)}\.{re.escape(join_table)}\.{time_column}\s+BETWEEN\s+(\w+\([^)]+\))\s+AND\s+(\w+\([^)]+\))"
         time_match = re.search(fq_pattern, sql, re.IGNORECASE)
 
         if not time_match:
@@ -113,28 +123,25 @@ def apply_hdx_join_workaround(sql: str, database_name: str, siem_table: str, cdn
     subquery = f"(SELECT * FROM {full_table_name} WHERE {time_column} BETWEEN {time_start} AND {time_end})"
 
     # Replace the JOIN table with subquery
-    # Find the exact JOIN clause to replace
-    original_join = join_match.group(0)  # e.g., "JOIN akamai_jp.siem AS waf ON"
-
     # Construct replacement: JOIN (subquery) AS alias ON
     new_join = f"JOIN {subquery} AS {join_alias} ON"
 
     # Replace in SQL
-    sql = sql[:join_match.start()] + new_join + sql[join_match.end():]
+    sql = sql[: join_match.start()] + new_join + sql[join_match.end() :]
 
     # Remove the time filter from WHERE clause (now in subquery)
     # Need to handle both alias.column and db.table.column formats
     sql = re.sub(
-        rf'\s+AND\s+{re.escape(join_alias)}\.{time_column}\s+BETWEEN\s+\w+\([^)]+\)\s+AND\s+\w+\([^)]+\)',
-        '',
+        rf"\s+AND\s+{re.escape(join_alias)}\.{time_column}\s+BETWEEN\s+\w+\([^)]+\)\s+AND\s+\w+\([^)]+\)",
+        "",
         sql,
-        flags=re.IGNORECASE
+        flags=re.IGNORECASE,
     )
     sql = re.sub(
-        rf'\s+AND\s+{re.escape(join_db)}\.{re.escape(join_table)}\.{time_column}\s+BETWEEN\s+\w+\([^)]+\)\s+AND\s+\w+\([^)]+\)',
-        '',
+        rf"\s+AND\s+{re.escape(join_db)}\.{re.escape(join_table)}\.{time_column}\s+BETWEEN\s+\w+\([^)]+\)\s+AND\s+\w+\([^)]+\)",
+        "",
         sql,
-        flags=re.IGNORECASE
+        flags=re.IGNORECASE,
     )
 
     return sql

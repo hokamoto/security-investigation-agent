@@ -23,7 +23,7 @@ def init_db() -> None:
     Creates tables and indexes if they don't exist.
     Safe to call multiple times (idempotent).
     """
-    db_path = CONFIG['db_path']
+    db_path = CONFIG["db_path"]
     logger.info(f"Initializing database at {db_path}")
 
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -75,11 +75,14 @@ def _get_available_hosts_meta(conn: sqlite3.Connection, key: str) -> Optional[st
 
 
 def _set_available_hosts_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
-    conn.execute("""
+    conn.execute(
+        """
         INSERT INTO available_hosts_meta (key, value)
         VALUES (?, ?)
         ON CONFLICT(key) DO UPDATE SET value = excluded.value
-    """, (key, value))
+    """,
+        (key, value),
+    )
 
 
 def replace_available_hosts(hosts: List[str], updated_at: str) -> None:
@@ -153,7 +156,7 @@ def get_db() -> sqlite3.Connection:
     Returns:
         SQLite connection with Row factory for dict-like access.
     """
-    conn = sqlite3.connect(CONFIG['db_path'])
+    conn = sqlite3.connect(CONFIG["db_path"])
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -169,16 +172,19 @@ def create_job(question: str) -> str:
         Job ID (UUID).
     """
     job_id = str(uuid.uuid4())
-    created_at = datetime.now(UTC).isoformat().replace('+00:00', 'Z')
+    created_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
     logger.info(f"Creating job {job_id}")
 
     conn = get_db()
     try:
-        conn.execute("""
+        conn.execute(
+            """
             INSERT INTO jobs (id, question, status, created_at)
             VALUES (?, ?, 'pending', ?)
-        """, (job_id, question, created_at))
+        """,
+            (job_id, question, created_at),
+        )
         conn.commit()
         logger.info(f"Job {job_id} created in database")
     except Exception as e:
@@ -221,11 +227,14 @@ def list_jobs(limit: int = 50) -> List[Dict[str, Any]]:
     """
     conn = get_db()
     try:
-        cursor = conn.execute("""
+        cursor = conn.execute(
+            """
             SELECT * FROM jobs
             ORDER BY created_at DESC
             LIMIT ?
-        """, (limit,))
+        """,
+            (limit,),
+        )
         return [dict(row) for row in cursor.fetchall()]
     finally:
         conn.close()
@@ -268,18 +277,21 @@ def claim_next_pending_job() -> Optional[Tuple[str, str]]:
             row = cursor.fetchone()
 
             if row:
-                job_id = row['id']
-                started_at = datetime.now(UTC).isoformat().replace('+00:00', 'Z')
+                job_id = row["id"]
+                started_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
                 # Atomic update with status check (prevent race conditions)
-                conn.execute("""
+                conn.execute(
+                    """
                     UPDATE jobs
                     SET status = 'running',
                         started_at = ?
                     WHERE id = ? AND status = 'pending'
-                """, (started_at, job_id))
+                """,
+                    (started_at, job_id),
+                )
 
-                return (job_id, row['question'])
+                return (job_id, row["question"])
 
         return None
     finally:
@@ -294,17 +306,20 @@ def mark_completed(job_id: str, result_path: str) -> None:
         job_id: Job UUID.
         result_path: Path to output.json file.
     """
-    completed_at = datetime.now(UTC).isoformat().replace('+00:00', 'Z')
+    completed_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
     conn = get_db()
     try:
-        conn.execute("""
+        conn.execute(
+            """
             UPDATE jobs
             SET status = 'completed',
                 completed_at = ?,
                 result_path = ?
             WHERE id = ?
-        """, (completed_at, result_path, job_id))
+        """,
+            (completed_at, result_path, job_id),
+        )
         conn.commit()
     finally:
         conn.close()
@@ -318,17 +333,20 @@ def mark_failed(job_id: str, error_message: str) -> None:
         job_id: Job UUID.
         error_message: Error description.
     """
-    completed_at = datetime.now(UTC).isoformat().replace('+00:00', 'Z')
+    completed_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
     conn = get_db()
     try:
-        conn.execute("""
+        conn.execute(
+            """
             UPDATE jobs
             SET status = 'failed',
                 completed_at = ?,
                 error_message = ?
             WHERE id = ?
-        """, (completed_at, error_message, job_id))
+        """,
+            (completed_at, error_message, job_id),
+        )
         conn.commit()
     finally:
         conn.close()
@@ -362,17 +380,20 @@ def recover_stale_jobs() -> int:
     Returns:
         Number of jobs recovered.
     """
-    timeout_seconds = CONFIG['job_timeout_seconds']
+    timeout_seconds = CONFIG["job_timeout_seconds"]
 
     conn = get_db()
     try:
-        cursor = conn.execute("""
+        cursor = conn.execute(
+            """
             UPDATE jobs
             SET status = 'pending',
                 started_at = NULL
             WHERE status = 'running'
               AND datetime(started_at) < datetime('now', '-' || ? || ' seconds')
-        """, (timeout_seconds,))
+        """,
+            (timeout_seconds,),
+        )
         conn.commit()
         return cursor.rowcount
     finally:
@@ -391,14 +412,17 @@ def get_pending_position(job_id: str) -> Optional[int]:
     """
     conn = get_db()
     try:
-        cursor = conn.execute("""
+        cursor = conn.execute(
+            """
             WITH ranked AS (
                 SELECT id, ROW_NUMBER() OVER (ORDER BY created_at ASC) as position
                 FROM jobs
                 WHERE status = 'pending'
             )
             SELECT position FROM ranked WHERE id = ?
-        """, (job_id,))
+        """,
+            (job_id,),
+        )
         row = cursor.fetchone()
         return row[0] if row else None
     finally:
@@ -416,22 +440,25 @@ def cleanup_old_jobs() -> int:
     """
     import shutil
 
-    retention_hours = CONFIG['job_retention_hours']
+    retention_hours = CONFIG["job_retention_hours"]
 
     conn = get_db()
     try:
         # Find old jobs with result paths
-        cursor = conn.execute("""
+        cursor = conn.execute(
+            """
             SELECT id, result_path FROM jobs
             WHERE status IN ('completed', 'failed')
               AND datetime(completed_at) < datetime('now', '-' || ? || ' hours')
-        """, (retention_hours,))
+        """,
+            (retention_hours,),
+        )
 
         jobs_to_delete = cursor.fetchall()
 
         # Delete result files
         for row in jobs_to_delete:
-            result_path = row['result_path']
+            result_path = row["result_path"]
             if result_path:
                 result_dir = Path(result_path).parent
                 if result_dir.exists():
@@ -442,8 +469,8 @@ def cleanup_old_jobs() -> int:
 
         # Delete job records
         if jobs_to_delete:
-            job_ids = [row['id'] for row in jobs_to_delete]
-            placeholders = ','.join('?' * len(job_ids))
+            job_ids = [row["id"] for row in jobs_to_delete]
+            placeholders = ",".join("?" * len(job_ids))
             conn.execute(f"DELETE FROM jobs WHERE id IN ({placeholders})", job_ids)
             conn.commit()
 

@@ -72,10 +72,11 @@ class AgentState:
     executed_queries: List[ExecutedQuery] = field(default_factory=list)
     next_query_id: int = 1  # Global query ID counter (continues across rounds)
     synthesis_summary: str = ""  # Cumulative synthesis summary from previous round
+    supporting_data: str = ""  # Key data points supporting the final answer
+    data_gaps: str = ""  # Facts that couldn't be established due to insufficient data
     investigation_log: List[Dict[str, Any]] = field(default_factory=list)
-    session_logger: SessionLogger = field(
-        default=None
-    )  # Session logger for structured logging
+    original_language: str = "English"  # Detected language of the user's original question
+    session_logger: SessionLogger = field(default=None)  # Session logger for structured logging
 
     @property
     def database_name(self) -> str:

@@ -53,10 +53,7 @@ def prepare_executed_queries_for_baml(
         result = eq.result
         # Convert row values to strings for BAML map<string, string>[] type
         rows = result.get("rows", [])
-        result_rows: List[dict[str, str]] = [
-            {k: str(v) if v is not None else "NULL" for k, v in row.items()}
-            for row in rows
-        ]
+        result_rows: List[dict[str, str]] = [{k: str(v) if v is not None else "NULL" for k, v in row.items()} for row in rows]
 
         baml_queries.append(
             ExecutedQueryForBAML(
@@ -102,6 +99,7 @@ def synthesize_and_replan(state: AgentState) -> SynthesizeAndReplanResult:
         siem_log_table_name=state.siem_log_table_name,
         cdn_log_table_name=state.cdn_log_table_name,
         session_timestamp=state.session_timestamp,
+        original_language=state.original_language,
     )
 
     # Make the HTTP call with timing
@@ -112,9 +110,7 @@ def synthesize_and_replan(state: AgentState) -> SynthesizeAndReplanResult:
     # Parse the response
     raw_content = response_json["choices"][0]["message"]["content"]
     if raw_content is None:
-        raise ValueError(
-            f"LLM returned None content. Response: {response_json}"
-        )
+        raise ValueError(f"LLM returned None content. Response: {response_json}")
     try:
         parsed: SynthesizeAndReplanResult = b.parse.SynthesizeAndReplan(raw_content)
     except BamlError as e:
@@ -127,9 +123,7 @@ def synthesize_and_replan(state: AgentState) -> SynthesizeAndReplanResult:
             "prompt": getattr(e, "prompt", "N/A"),
             "detailed_message": getattr(e, "detailed_message", str(e)),
         }
-        state.session_logger.log_error(
-            e, context=f"BAML validation error in SynthesizeAndReplan: {error_details}"
-        )
+        state.session_logger.log_error(e, context=f"BAML validation error in SynthesizeAndReplan: {error_details}")
         # Re-raise to crash the program as requested
         raise
 
@@ -159,11 +153,13 @@ def synthesize_and_replan(state: AgentState) -> SynthesizeAndReplanResult:
         parsed.synthesis_summary = process_output_tags(parsed.synthesis_summary)
     if parsed.final_answer:
         parsed.final_answer = process_output_tags(parsed.final_answer)
+    if parsed.supporting_data:
+        parsed.supporting_data = process_output_tags(parsed.supporting_data)
+    if parsed.data_gaps:
+        parsed.data_gaps = process_output_tags(parsed.data_gaps)
 
     # Update ExecutedQuery objects with interpretations and gaps
-    _update_executed_queries_with_interpretations(
-        state.executed_queries, parsed.query_interpretations
-    )
+    _update_executed_queries_with_interpretations(state.executed_queries, parsed.query_interpretations)
 
     # Save synthesis_summary to state for next round
     state.synthesis_summary = parsed.synthesis_summary

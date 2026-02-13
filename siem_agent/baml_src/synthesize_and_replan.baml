@@ -13,7 +13,8 @@ function SynthesizeAndReplan(
   database_name: string,
   siem_log_table_name: string,
   cdn_log_table_name: string,
-  session_timestamp: string
+  session_timestamp: string,
+  original_language: string
 ) -> SynthesizeAndReplanResult {
   client GptOss
   prompt #"
@@ -100,15 +101,28 @@ function SynthesizeAndReplan(
 
     If COMPLETE:
     Provide `final_answer`:
-    - Directly answer the user's question
+    - Before finalizing, run a coverage self-check against the user question and confirm every ask is explicitly answered (including required qualifiers such as time range, target host/service, and metric type when requested)
+    - Do not imply answers. Directly answer the user's questions. State each answer explicitly in text, even if it can be inferred from tables or other evidence
     - Include specific facts with `<fact>` tags (for numerical values and IP addresses only)
     - Use `<calc>` tags for any derived calculations (e.g., percentages, ratios across queries)
     - Reference the evidence from query results
-    - Be concise but complete
     - When the question asks for "detailed breakdown", "analyze", or similar, include ALL relevant details from your query results—do not omit categories or subcategories
     - When reporting breakdowns, ALWAYS include specific counts for each category
     - **Format multiple values as Markdown tables when presenting 3 or more rows OR 3 or more columns** (e.g., use table format for listing multiple IPs with counts, attack types distribution, etc.)
     - **CRITICAL**: When detailed breakdown data is available but totals/aggregates were not directly queried, compute and report the totals from the available data (e.g., sum of counts to get total, identification of predominant categories by comparing counts)
+    {% if original_language != "English" %}
+    - After compiling and provide the `final_answer`, also include the {{ original_language }} language translation in the `final_answer` as well. Preserve all technical terms, identifiers such as hostnames, IP addresses, timestamps, rule tags, etc. exactly as they appear.
+    {% endif %}
+
+    Also provide `supporting_data`:
+    - Present the key data points, query results, and evidence that support the claims made in the final answer
+    - Reference specific query IDs and values if any
+
+    Also provide `data_gaps`:
+    - Describe any aspects of the question that could not be fully answered
+    - Note data that was missing or inconclusive
+    - If any ask from the user question is not answerable, explicitly list it as `Not enough data for <ask>`
+    - If there are no gaps, return `null`
 
     If CONTINUE:
     Provide `replan`:

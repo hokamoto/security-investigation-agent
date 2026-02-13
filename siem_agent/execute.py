@@ -14,7 +14,10 @@ from siem_agent.baml_client.types import (
     InvestigationPlan,
 )
 from siem_agent.clickhouse import ClickHouseClient
-from siem_agent.sql_utils import normalize_clickhouse_array_functions, apply_sql_transformations
+from siem_agent.sql_utils import (
+    normalize_clickhouse_array_functions,
+    apply_sql_transformations,
+)
 
 
 # Python dataclass to track execution results (not BAML-generated)
@@ -121,10 +124,7 @@ def repair_sql_batch_with_baml(
 
         # Log the batch repair LLM call
         prompt_full = _extract_prompt_from_request(req)
-        parent_ids = [
-            f"{state.current_replanning_round}_sql_{fq.query_id}"
-            for fq in failed_queries
-        ]
+        parent_ids = [f"{state.current_replanning_round}_sql_{fq.query_id}" for fq in failed_queries]
         state.session_logger.log_llm_call(
             call_type="batch_repair",
             prompt_full=prompt_full,
@@ -217,9 +217,7 @@ def execute_investigation_plan(
                 continue
 
             with state.session_logger.timed_event() as timer:
-                exec_result = state.ch_client.execute_query(
-                    sql=entry["current_sql"], prepare=True
-                )
+                exec_result = state.ch_client.execute_query(sql=entry["current_sql"], prepare=True)
 
             is_repair = entry["repair_attempt"] > 0
 

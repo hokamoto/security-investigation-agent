@@ -6,6 +6,7 @@ This module provides functions to:
 """
 
 import re
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from dataclasses import dataclass
 from typing import List, Tuple
 
@@ -52,6 +53,30 @@ FACT_TAG_PATTERN = re.compile(
     r"/?>",  # Match both /> and >
     re.DOTALL,
 )
+
+
+def _normalize_fact_val(val: str) -> str:
+    """Apply heuristic formatting for numeric fact values.
+
+    Rule:
+    - If val is a decimal number with 3+ fractional digits, round to 1 decimal place.
+    - If val has 0-2 fractional digits, keep as-is.
+    - Non-numeric values (e.g., IP addresses, text) are unchanged.
+    """
+    decimal_match = re.fullmatch(r"[+-]?(?:\d+\.\d+|\.\d+)", val)
+    if not decimal_match:
+        return val
+
+    fractional_digits = val.split(".", maxsplit=1)[1]
+    if len(fractional_digits) < 3:
+        return val
+
+    try:
+        rounded = Decimal(val).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+    except (InvalidOperation, ValueError):
+        return val
+
+    return f"{rounded:.1f}"
 
 
 def _safe_eval(expr: str) -> float:
@@ -176,7 +201,7 @@ def resolve_fact_tags(text: str) -> str:
     """
 
     def replace_fact(match: re.Match) -> str:
-        return match.group("val")
+        return _normalize_fact_val(match.group("val"))
 
     return FACT_TAG_PATTERN.sub(replace_fact, text)
 

@@ -41,9 +41,7 @@ class ClickHouseClient:
         self.cdn_log_table_name = self._ch_config["cdn_log_table_name"]
         self.max_result_rows = self._ch_config.get("max_result_rows", 100)
         self.excluded_rule_tag_prefixes = [
-            prefix.strip()
-            for prefix in self.config.get("agent", {}).get("excluded_rule_tag_prefixes", [])
-            if isinstance(prefix, str) and prefix.strip()
+            prefix.strip() for prefix in self.config.get("agent", {}).get("excluded_rule_tag_prefixes", []) if isinstance(prefix, str) and prefix.strip()
         ]
 
         self._client = None
@@ -263,8 +261,7 @@ SETTINGS readonly = {readonly}, max_execution_time = 20, max_result_rows = {effe
             available_rule_tags = [
                 rule_tag
                 for row in result["rows"]
-                if (rule_tag := row["ruleTag"])
-                and not any(rule_tag.startswith(prefix) for prefix in self.excluded_rule_tag_prefixes)
+                if (rule_tag := row["ruleTag"]) and not any(rule_tag.startswith(prefix) for prefix in self.excluded_rule_tag_prefixes)
             ]
 
         return available_hosts, available_rule_tags
