@@ -170,6 +170,10 @@ SQL MUST be in **ClickHouse dialect** and **single-line format** (no `\\n` escap
 #### 1.2 Query Simplicity
 - **One query = one purpose**: For multiple requirements (e.g., "find top IP AND list its paths"), create SEPARATE queries
 
+#### 1.3 Table Authorization
+- **ONLY** query `{{ database_name }}.{{ siem_log_table_name }}` and `{{ database_name }}.{{ cdn_log_table_name }}`
+- **NEVER** query system tables, information_schema, or any other table/database
+
 ---
 
 ### 2. Required Filters (MUST include in every query)
@@ -198,9 +202,12 @@ SQL MUST be in **ClickHouse dialect** and **single-line format** (no `\\n` escap
 
 #### 3.1 Basic Syntax (CRITICAL)
 - ARRAY JOIN MUST come immediately after FROM, BEFORE WHERE
+- WHERE clause MUST appear exactly once per query (never add a second WHERE after ARRAY JOIN)
 - Pass array column directly (NEVER wrap with `arrayJoin()` function)
 - **Row expansion**: ARRAY JOIN expands each array element into a separate row. An array with N elements produces N rows from 1 original row. **Do NOT assume any `Array(String)` column always has exactly 1 element**—all array columns can contain multiple elements, which means `count()` after ARRAY JOIN counts expanded rows, not original requests.
 - Example: `SELECT ruleTag, count() FROM {{ database_name }}.{{ siem_log_table_name }} ARRAY JOIN ruleTags AS ruleTag WHERE host = '...' GROUP BY ruleTag`
+- Correct single-WHERE pattern: `SELECT ruleTag, count() FROM {{ database_name }}.{{ siem_log_table_name }} ARRAY JOIN ruleTags AS ruleTag WHERE host = '...' AND timestamp BETWEEN parseDateTimeBestEffort('...') AND parseDateTimeBestEffort('...') AND ruleTag IN ('...') GROUP BY ruleTag`
+- PROHIBITED pattern (will fail): `... WHERE host = '...' ARRAY JOIN ruleTags AS ruleTag WHERE ruleTag IN ('...')`
 
 #### 3.2 Multiple ARRAY JOIN
 - **Parallel expansion**: ONLY the 5 rule arrays (`ruleMessages`, `ruleSelectors`, `ruleData`, `ruleTags`, `rules`) have 1:1 index correspondence and can be expanded together
@@ -261,7 +268,6 @@ When `length(rules) > 1`: last element = risk group, others = individual rules. 
 
 - Join key: `{{ database_name }}.{{ siem_log_table_name }}.requestId = {{ database_name }}.{{ cdn_log_table_name }}.reqId`
 - **Prefer separate queries** for simple aggregations; use JOINs only when correlating specific request details
-- JOIN conditions: Only equality (`=`), no range operators. For time-based joins: use `WHERE` or `ASOF JOIN`
 - **Time filters**: MUST include time filters for BOTH tables (see section 2.2)
 
 ### 6. Syntax Reference
@@ -269,8 +275,9 @@ When `length(rules) > 1`: last element = risk group, others = individual rules. 
 | Category | Syntax |
 |----------|--------|
 | Aggregation | All SELECT/HAVING columns must be in GROUP BY or wrapped in aggregate. Alias pattern: `any(city) AS any_city` |
+| Column aliases | MUST be given different names from source table column names (e.g., use `unique_tags` instead of `ruleTags` for output aliases) |
 | Arrays | `length(array)`, `empty(array) = 1`, `has()`, `arrayElement()`, `indexOf()` |
-| Maps | In WHERE: `assumeNotNull(map['key'])`. Check existence: `mapContains(map, 'key')` |
+| Maps | In WHERE: `assumeNotNull(map['key'])` |
 | arrayZip | Returns tuples. Access via `.1`, `.2`, etc. |
 | Window functions | Use snake_case: `row_number()`, `dense_rank()`, `ntile()` |
 
@@ -357,6 +364,48 @@ SELECT clientIP, groupUniqArray(tag) AS unique_rule_tags FROM t ARRAY JOIN ruleT
 
 This applies to ALL array columns: `ruleTags`, `attackTypes`, `rules`, `ruleMessages`, `ruleSelectors`, `ruleData`.
 When repairing query {{ query.query_index }}, rename the output column to avoid the conflict (e.g., prefix with `unique_` or `collected_`).
+
+{% endif %}
+{% if 'Missing columns' in query.error_message %}
+### Correlated Subquery in JOIN Source (query {{ query.query_index }})
+
+ClickHouse does not support correlated subqueries as JOIN sources—subqueries that reference columns from outer tables in their WHERE clause.
+
+**Works** (move time range filter to WHERE clause after JOIN):
+```sql
+SELECT ...
+FROM table1 AS t1
+JOIN table2 AS t2 ON t1.id = t2.id
+WHERE t2.timestamp BETWEEN t1.some_time + INTERVAL '30' MINUTE
+                       AND t1.some_time + INTERVAL '24' HOUR
+```
+
+**Alternative** (if subquery was filtering before JOIN, filter in main WHERE instead):
+```sql
+SELECT ...
+FROM table1 AS t1
+JOIN table2 AS t2 ON t1.id = t2.id
+WHERE t2.timestamp >= t1.some_time + INTERVAL '30' MINUTE
+  AND t2.timestamp <= t1.some_time + INTERVAL '24' HOUR
+```
+
+When repairing query {{ query.query_index }}, remove correlated references (references to outer table columns) from JOIN subqueries and move those filters to the main WHERE clause after the JOIN.
+
+{% endif %}
+{% if 'hdx_query_timerange_required' in query.error_message %}
+### HDX Time-Range Requirement Violation (query {{ query.query_index }})
+
+Hydrolix requires explicit time-range predicates that it can recognize for every scanned source. For JOIN queries, this often fails when time predicates are ambiguous or hidden behind complex CTE/JOIN shapes.
+
+When repairing query {{ query.query_index }}, follow ALL rules below:
+1. Use explicit table aliases and qualify time filters with aliases (for example, `w.timestamp` and `c.reqTimeSec`).
+2. Ensure time predicates are concrete `BETWEEN parseDateTimeBestEffort(...) AND parseDateTimeBestEffort(...)`.
+3. For JOIN queries, include time-range filters for BOTH WAF and CDN sources.
+4. If prior attempts still fail with the same error, simplify aggressively:
+   - avoid joining CTE outputs
+   - avoid multi-CTE + JOIN combinations
+   - prefer a simpler direct-table query or a single-table fallback that still answers the core purpose
+5. Keep host filter and requested time range intact.
 
 {% endif %}
 {% endfor %}

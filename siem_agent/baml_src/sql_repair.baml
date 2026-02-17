@@ -31,6 +31,10 @@ function RepairSqlBatch(
     2. Each repair MUST include the `query_index` that matches the input query's `query_index`.
     3. Repair each query independently — do not let one repair influence another.
     4. Preserve each query's original intent and purpose. Only fix the specific error.
+    5. If a query has `previous_attempts`, those SQL variants have ALREADY FAILED. You MUST use a fundamentally different approach:
+       - Do NOT repeat or minimally tweak a previously failed SQL pattern
+       - Analyze WHY each previous attempt failed and choose a structurally different strategy
+       - If the same error keeps recurring, simplify the query (remove JOINs, reduce CTEs, use simpler aggregation)
 
     ### Repair-Specific Guidelines
 

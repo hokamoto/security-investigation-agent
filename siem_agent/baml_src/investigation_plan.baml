@@ -38,37 +38,37 @@ function GenerateInvestigationPlan(
     ## Step 1: Answerability Evaluation
 
     Before generating any queries, evaluate whether the question can be answered.
+    Check ALL of the following 5 requirements in order. If ANY requirement fails, set `is_answerable=false`.
 
-    ### Query Completeness Requirements (check FIRST)
+    1. **Out of Scope Requests:**
+       - If the user's question includes any actions other than data analysis, such as creating presentations or slides, generating graphs or visualizations, or executing commands or performing system operations, set `is_answerable=false`
 
-    1. **Explicit Time Period Required:**
+    2. **Explicit Time Period Required:**
        - The user question MUST specify a time range explicitly
        - Valid examples: "last 7 days", "yesterday", "between 2025-01-01 and 2025-01-05", "in December 2025", "past 24 hours"
        - If NO time period is specified: set `is_answerable=false`
        - DO NOT assume a default time period - always require explicit specification
 
-    2. **Explicit Target Host Required:**
+    3. **Explicit Target Host Required:**
        - The user question MUST specify EITHER:
          a) A specific host name (e.g., "www.example.com")
          b) Explicit "all hosts" intent (e.g., "across all hosts", "for all available hosts", "on any host")
        - If NO host is specified AND no "all hosts" intent is expressed: set `is_answerable=false`
        - DO NOT assume a default host - always require explicit specification
 
-    ### Data Availability Requirements
+    4. **Data Availability:**
+       - The databases do NOT contain: business KPIs, user identities, full request bodies, performance/SLA metrics, or external intelligence
+       - Questions requiring these are unanswerable: "total conversions or revenue", "unique users/sessions", "app latency/availability", "user credentials"
 
-    - The databases do NOT contain: business KPIs, user identities, full request bodies, performance/SLA metrics, or external intelligence
-    - Questions requiring these are unanswerable: "total conversions or revenue", "unique users/sessions", "app latency/availability", "user credentials"
-
-    ### Data Uncertainty Handling
-
-    - If the question requires information that MIGHT be present in request headers or query strings but is NOT guaranteed (e.g., usernames, session IDs):
-      - **If the question explicitly specifies WHERE the information exists** (e.g., "check `X-User-ID` header"): `is_answerable=true`
-      - **If the question does NOT specify the location**: `is_answerable=false` (explain that the location is not specified)
+    5. **Data Uncertainty Handling:**
+       - If the question requires information that MIGHT be present in request headers or query strings but is NOT guaranteed (e.g., usernames, session IDs):
+         - **If the question explicitly specifies WHERE the information exists** (e.g., "check `X-User-ID` header"): `is_answerable=true`
+         - **If the question does NOT specify the location**: `is_answerable=false` (explain that the location is not specified)
 
     ### When Unanswerable
 
     If `is_answerable=false`, set:
-    - `unanswerable_reason`: Explain which requirement failed and why
+    - `answerability_rationale`: Explain which requirement failed and why
     - `investigation_strategy`: null
     - `queries`: null
 
@@ -91,6 +91,7 @@ function GenerateInvestigationPlan(
     - Respect schema differences: WAF uses host/timestamp, CDN uses reqHost/reqTimeSec. Do NOT mix columns across tables
     - Avoid redundant queries. Each query should add new information
     - **CRITICAL**: When questions ask for "most", "top", "highest", or similar superlatives, ALWAYS include `count()` or the relevant metric in the SELECT clause, not just in ORDER BY. Example: `SELECT path, count() AS total FROM ... GROUP BY path ORDER BY total DESC LIMIT 1` (NOT just `SELECT path FROM ... ORDER BY count() DESC LIMIT 1`)
+
     ### Multi-Round Investigation Strategy
 
     **This architecture enables powerful incremental investigation**: You can execute simple queries, examine their results, and generate follow-up queries based on what you learned.
@@ -113,7 +114,7 @@ function GenerateInvestigationPlan(
 
     ### Output for Answerable Questions
     - `is_answerable`: true
-    - `unanswerable_reason`: null
+    - `answerability_rationale`: Explain the conditions for being unanswerable were not met
     - `investigation_strategy`: Detailed explanation of the investigation approach
     - `queries`: Array of SQL query objects
 

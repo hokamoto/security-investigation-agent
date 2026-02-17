@@ -80,7 +80,7 @@ class ClickHouseClient:
         readonly: int = 2,
         max_result_rows: int | None = None,
     ) -> str:
-        """Prepare SQL for execution by applying transformations.
+        """Prepare SQL for execution by appending safety SETTINGS.
 
         Args:
             sql: Raw SQL query string
@@ -91,11 +91,6 @@ class ClickHouseClient:
             Prepared SQL string
         """
         effective_max_rows = max_result_rows if max_result_rows is not None else self.max_result_rows
-
-        # Replace now() with fixed timestamp
-        replacement = f"parseDateTimeBestEffort('{self.session_timestamp}')"
-        pattern = r"\bnow\s*\(\s*\)"
-        sql = re.sub(pattern, replacement, sql, flags=re.IGNORECASE)
 
         # Append SETTINGS clause if not present
         sql = sql.rstrip().rstrip(";")
@@ -144,7 +139,6 @@ SETTINGS readonly = {readonly}, max_execution_time = 20, max_result_rows = {effe
             }
         except Exception as e:
             error_str = str(e)
-            error_code = None
             error_message = error_str  # Default to full error string
 
             # Try to extract structured error information from JSON response
@@ -159,15 +153,9 @@ SETTINGS readonly = {readonly}, max_execution_time = 20, max_result_rows = {effe
                     json_str = error_str[json_start:json_end].strip()
                     parsed = json.loads(json_str)
 
-                    # Extract error code and message
+                    # Extract concise message
                     if "error" in parsed:
                         full_error = parsed["error"]
-                        # Extract code: "Code: 62. DB::Exception: ..."
-                        import re
-
-                        code_match = re.match(r"^Code:\s*(\d+)\.", full_error)
-                        if code_match:
-                            error_code = int(code_match.group(1))
 
                         # Extract message after "DB::Exception:"
                         if "DB::Exception:" in full_error:
@@ -189,7 +177,6 @@ SETTINGS readonly = {readonly}, max_execution_time = 20, max_result_rows = {effe
             return {
                 "success": False,
                 "error": error_str,  # Full error string for logging
-                "error_code": error_code,  # Structured: ClickHouse error code
                 "error_message": error_message,  # Structured: concise error message
                 "sql": sql,
             }

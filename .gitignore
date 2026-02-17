@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
+.ruff_cache
 
 # Virtual Environments
 venv/
@@ -39,3 +40,10 @@ config.yaml
 
 # Test artifatcs
 tests/artifacts/
+test_results/
+
+# Web frontend runtime data
+data/
+
+# BAML
+baml_client

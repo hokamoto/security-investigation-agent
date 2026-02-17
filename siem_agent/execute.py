@@ -12,12 +12,10 @@ from siem_agent.baml_client.types import (
     BatchSqlRepairItem,
     FailedQueryForRepair,
     InvestigationPlan,
+    PreviousRepairAttempt,
 )
 from siem_agent.clickhouse import ClickHouseClient
-from siem_agent.sql_utils import (
-    normalize_clickhouse_array_functions,
-    apply_sql_transformations,
-)
+from siem_agent.sql_utils import process_sql
 
 
 # Python dataclass to track execution results (not BAML-generated)
@@ -51,6 +49,7 @@ class _FailedQueryInfo:
     purpose: str
     current_sql: str
     error_message: str
+    attempt_history: list  # list of {"sql": str, "error": str}
 
 
 def repair_sql_batch_with_baml(
@@ -72,6 +71,7 @@ def repair_sql_batch_with_baml(
             purpose=fq.purpose,
             sql=fq.current_sql,
             error_message=fq.error_message,
+            previous_attempts=[PreviousRepairAttempt(sql=a["sql"], error_message=a["error"]) for a in fq.attempt_history],
         )
         for fq in failed_queries
     ]
@@ -111,11 +111,17 @@ def repair_sql_batch_with_baml(
             )
             raise
 
-        # Normalize array functions and apply SQL transformations in all repaired SQL
+        # Process repaired SQL through the unified SQL pipeline.
         for item in parsed_list:
             if item.sql:
-                item.sql = normalize_clickhouse_array_functions(item.sql)
-                item.sql = apply_sql_transformations(item.sql, state)
+                processed_sql, is_valid, _ = process_sql(
+                    sql=item.sql,
+                    database_name=state.database_name,
+                    siem_table=state.siem_log_table_name,
+                    cdn_table=state.cdn_log_table_name,
+                    session_timestamp=state.session_timestamp,
+                )
+                item.sql = processed_sql if is_valid else item.sql
 
         # Build result dict keyed by query_index
         result_map: Dict[int, BatchSqlRepairItem] = {}
@@ -194,17 +200,15 @@ def execute_investigation_plan(
         assigned_query_id = state.next_query_id
         state.next_query_id += 1
 
-        # Apply SQL transformations (including HDX JOIN workaround)
-        transformed_sql = apply_sql_transformations(query.sql, state)
-
         query_entries.append(
             {
                 "query_id": assigned_query_id,
                 "purpose": query.purpose,
                 "original_sql": query.sql,
-                "current_sql": transformed_sql,
+                "current_sql": query.sql,
                 "completed": False,
                 "repair_attempt": 0,
+                "attempt_history": [],
             }
         )
 
@@ -215,6 +219,57 @@ def execute_investigation_plan(
         for idx, entry in enumerate(query_entries):
             if entry["completed"]:
                 continue
+
+            processed_sql, is_valid, validation_error = process_sql(
+                sql=entry["current_sql"],
+                database_name=state.database_name,
+                siem_table=state.siem_log_table_name,
+                cdn_table=state.cdn_log_table_name,
+                session_timestamp=state.session_timestamp,
+            )
+            if not is_valid:
+                blocked_error = f"BLOCKED: {validation_error}"
+                state.session_logger.log_sql_query(
+                    query_id=entry["query_id"],
+                    purpose=entry["purpose"],
+                    sql_original=entry["original_sql"],
+                    sql_executed=entry["current_sql"],
+                    success=False,
+                    duration=0.0,
+                    error_message=blocked_error,
+                    is_repair_attempt=entry["repair_attempt"] > 0,
+                    repair_attempt_number=entry["repair_attempt"],
+                    parent_query_id=None,
+                )
+
+                if repair_round >= state.max_sql_repair_retries:
+                    # Max retries exhausted - give up on this query
+                    results.append(
+                        QueryExecutionResult(
+                            query_id=entry["query_id"],
+                            status="execution_failed",
+                            sql=entry["current_sql"],
+                            error_message=blocked_error,
+                        )
+                    )
+                    entry["completed"] = True
+                else:
+                    # Add to pending failures for batch repair
+                    entry["attempt_history"].append({"sql": entry["current_sql"], "error": blocked_error})
+                    pending_failures.append(
+                        _FailedQueryInfo(
+                            query_index=len(pending_failures) + 1,
+                            entry_index=idx,
+                            query_id=entry["query_id"],
+                            purpose=entry["purpose"],
+                            current_sql=entry["current_sql"],
+                            error_message=blocked_error,
+                            attempt_history=entry["attempt_history"][:-1],
+                        )
+                    )
+                continue
+
+            entry["current_sql"] = processed_sql
 
             with state.session_logger.timed_event() as timer:
                 exec_result = state.ch_client.execute_query(sql=entry["current_sql"], prepare=True)
@@ -295,6 +350,7 @@ def execute_investigation_plan(
                     )
                     entry["completed"] = True
                 else:
+                    entry["attempt_history"].append({"sql": entry["current_sql"], "error": concise_error})
                     pending_failures.append(
                         _FailedQueryInfo(
                             query_index=len(pending_failures) + 1,
@@ -303,6 +359,7 @@ def execute_investigation_plan(
                             purpose=entry["purpose"],
                             current_sql=entry["current_sql"],
                             error_message=concise_error,
+                            attempt_history=entry["attempt_history"][:-1],
                         )
                     )
 

@@ -76,29 +76,55 @@ def execute_job(job_id: str, question: str) -> None:
     # Build command. Current SIEM agent writes JSON to stdout when --json is provided.
     cmd = ["uv", "run", "-m", "siem_agent", "--json", question]
 
+    process = None
     try:
-        # Execute with timeout
-        process = subprocess.run(
+        # Start process with Popen to have control over the process lifecycle
+        process = subprocess.Popen(
             cmd,
             cwd=str(CONFIG["project_root"]),
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             encoding="utf-8",
-            timeout=CONFIG["job_timeout_seconds"],
         )
 
+        # Wait with timeout
+        try:
+            stdout, stderr = process.communicate(timeout=CONFIG["job_timeout_seconds"])
+        except subprocess.TimeoutExpired:
+            # Kill the process on timeout
+            print(f"[{job_id[:8]}] Job timed out, killing process (PID: {process.pid})...")
+            process.kill()
+            # Wait for process to terminate and collect any output
+            try:
+                stdout, stderr = process.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                # Force terminate if still running
+                process.terminate()
+                stdout, stderr = process.communicate(timeout=5)
+
+            timeout = CONFIG["job_timeout_seconds"]
+            error_msg = f"Job timed out after {timeout} seconds (process killed)"
+            mark_failed(job_id, error_msg)
+            print(f"[{job_id[:8]}] {error_msg}")
+
+            # Save partial output
+            stdout_path.write_text(stdout or "", encoding="utf-8")
+            stderr_path.write_text(f"TIMEOUT: {error_msg}\n{stderr or ''}", encoding="utf-8")
+            return
+
         # Save stdout/stderr regardless of exit code
-        stdout_path.write_text(process.stdout, encoding="utf-8")
-        stderr_path.write_text(process.stderr, encoding="utf-8")
+        stdout_path.write_text(stdout, encoding="utf-8")
+        stderr_path.write_text(stderr, encoding="utf-8")
 
         if process.returncode != 0:
-            error_msg = process.stderr or f"Process exited with code {process.returncode}"
+            error_msg = stderr or f"Process exited with code {process.returncode}"
             mark_failed(job_id, error_msg[:500])  # Truncate long errors
             print(f"[{job_id[:8]}] Failed: {error_msg[:100]}")
             return
 
         # Parse JSON output from stdout and persist for UI rendering.
         try:
-            result_payload = json.loads(process.stdout)
+            result_payload = json.loads(stdout)
         except json.JSONDecodeError as e:
             error_msg = f"Failed to parse JSON output: {e}"
             mark_failed(job_id, error_msg[:500])
@@ -112,20 +138,16 @@ def execute_job(job_id: str, question: str) -> None:
         mark_completed(job_id, str(result_path))
         print(f"[{job_id[:8]}] Completed successfully")
 
-    except subprocess.TimeoutExpired:
-        timeout = CONFIG["job_timeout_seconds"]
-        error_msg = f"Job timed out after {timeout} seconds"
-        mark_failed(job_id, error_msg)
-        print(f"[{job_id[:8]}] {error_msg}")
-
-        # Save partial output if exists
-        if result_path.exists():
+    except Exception as e:
+        # If we have a process and it's still running, kill it
+        if process and process.poll() is None:
+            print(f"[{job_id[:8]}] Killing process (PID: {process.pid}) due to error...")
+            process.kill()
             try:
-                stderr_path.write_text(f"TIMEOUT: {error_msg}\n", encoding="utf-8")
+                process.communicate(timeout=5)
             except Exception:
                 pass
 
-    except Exception as e:
         error_msg = f"Worker error: {str(e)}"
         mark_failed(job_id, error_msg[:500])
         print(f"[{job_id[:8]}] {error_msg}")

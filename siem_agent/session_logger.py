@@ -110,10 +110,17 @@ def _format_llm_call_message(data: dict) -> str:
     round_number = data.get("round_number", 0)
     prompt_tokens = data.get("prompt_tokens", 0)
     completion_tokens = data.get("completion_tokens", 0)
+    reasoning_tokens = data.get("reasoning_tokens", 0)
     duration = data.get("duration", 0)
 
     lines = [f"LLM call: {call_type} (round {round_number})"]
-    lines.append(f"  Tokens: {prompt_tokens} prompt → {completion_tokens} completion")
+
+    # Token usage with reasoning tokens if available
+    if reasoning_tokens > 0:
+        lines.append(f"  Tokens: {prompt_tokens} prompt → {completion_tokens} completion ({reasoning_tokens} reasoning)")
+    else:
+        lines.append(f"  Tokens: {prompt_tokens} prompt → {completion_tokens} completion")
+
     lines.append(f"  Duration: {duration:.2f}s")
 
     parsed = data.get("parsed_response")
@@ -567,15 +574,22 @@ class SessionLogger:
         prompt_tokens = usage.get("prompt_tokens", 0)
         completion_tokens = usage.get("completion_tokens", 0)
         total_tokens = usage.get("total_tokens", prompt_tokens + completion_tokens)
+        reasoning_tokens = usage.get("reasoning_tokens", 0)
 
         # Update aggregated statistics
         self._total_llm_calls += 1
         self._total_prompt_tokens += prompt_tokens
         self._total_completion_tokens += completion_tokens
 
-        # Get finish reason
+        # Get finish reason and reasoning content
         choices = response_json.get("choices", [{}])
         finish_reason = choices[0].get("finish_reason") if choices else None
+
+        # Extract reasoning content if available
+        reasoning_content = None
+        if choices:
+            message = choices[0].get("message", {})
+            reasoning_content = message.get("reasoning_content")
 
         # Get model info
         model_name = response_json.get("model", "unknown")
@@ -591,9 +605,11 @@ class SessionLogger:
             "prompt": prompt_full,
             "raw_response": raw_response,
             "parsed_response": parsed_response,
+            "reasoning_content": reasoning_content,
             "finish_reason": finish_reason,
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
+            "reasoning_tokens": reasoning_tokens,
             "total_tokens": total_tokens,
             "model_name": model_name,
         }
@@ -612,7 +628,6 @@ class SessionLogger:
         row_count: Optional[int] = None,
         columns: Optional[list] = None,
         rows: Optional[list] = None,
-        error_code: Optional[str] = None,
         error_message: Optional[str] = None,
         is_repair_attempt: bool = False,
         repair_attempt_number: int = 0,
@@ -630,7 +645,6 @@ class SessionLogger:
             row_count: Number of rows returned (if successful)
             columns: Column names (if successful)
             rows: Result rows (if successful)
-            error_code: Error code (if failed)
             error_message: Error message (if failed)
             is_repair_attempt: Whether this is a repair attempt
             repair_attempt_number: Which repair attempt (1, 2, ...)
@@ -646,7 +660,6 @@ class SessionLogger:
                     "purpose": purpose,
                     "sql": sql_executed,
                     "error_message": error_message,
-                    "error_code": error_code,
                     "is_repair_attempt": is_repair_attempt,
                     "repair_attempt_number": repair_attempt_number,
                 }
@@ -665,7 +678,6 @@ class SessionLogger:
             "row_count": row_count,
             "columns": columns,
             "rows": rows,
-            "error_code": error_code,
             "error_message": error_message,
             "is_repair_attempt": is_repair_attempt,
             "repair_attempt_number": repair_attempt_number,

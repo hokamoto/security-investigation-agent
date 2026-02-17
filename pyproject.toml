@@ -12,6 +12,7 @@ dependencies = [
     "typing-extensions>=4.15.0",
     "pydantic>=2.12.5",
     "bottle>=0.13.4",
+    "sqlglot>=28.10.1",
 ]
 
 [dependency-groups]
@@ -19,4 +20,5 @@ dev = [
     "ruff>=0.14.14",
     "vulture>=2.14",
     "pytest>=8.0.0",
+    "pytest-cov>=7.0.0",
 ]

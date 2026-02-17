@@ -45,6 +45,15 @@ LLMs struggle with arithmetic (e.g., calculating percentage increases or rate co
 
 When synthesis requires computing "211 / 712 * 100", the LLM writes `<calc formula="..." expr="211 / 712 * 100" precision="1" />` and the post-processor evaluates it using a safe Python evaluator, returning "29.6" as a verified result. The LLM never performs mental math; it only decides which calculations are needed and declares them as structured tags. This makes both hallucinated numbers and calculation errors detectable and correctable.
 
+**SQL Parsing Decouples Query Intent from Safety Guarantees**
+
+LLMs are probabilistic. Even with careful prompting, a model might generate a `DELETE` statement when asked to "clean up the data," or be manipulated into accessing unauthorized tables by adversarial instructions embedded in th input or log data themselves. This agent addresses this by separating responsibilities: the LLM decides *what to query* (intent), while a deterministic SQL parser enforces *how* that query is allowed to execute (safety and correctness). Before any LLM-generated SQL reaches the database, it is parsed into an abstract syntax tree and subjected to two layers of deterministic enforcement:
+
+- **Security boundary enforcement**: Any non-`SELECT` statement is rejected at the parsing layer, regardless of what the LLM generated, and only whitelisted tables are permitted—preventing prompt injection embedded in log data from causing unintended writes or unauthorized access.
+
+- **Systematic error correction**: Small LLMs reliably produce subtly wrong SQL—wrong function names, mismatched column names, invalid JOIN syntax. AST-level transforms automatically correct these known patterns: the LLM expresses analytical intent; the parser normalizes it into valid SQL.
+
+
 **LLM-as-a-Judge for Regression Testing**
 During development, this agent's analysis quality is validated through LLM-as-a-Judge evaluation for regression testing rather than traditional heuristics. When prompts or workflow logic change, automated tests execute the agent against pre-defined questions with known answers, then an LLM grader compares the agent's response to expected results.
 

@@ -6,18 +6,24 @@ class PlannedQuery {
 }
 
 class InvestigationPlan {
+  answerability_rationale string @description("Explanation of why the question is answerable or unanswerable (always required)")
   is_answerable bool @description("Whether the question can be answered with WAF/CDN logs")
-  unanswerable_reason string? @description("Explanation if not answerable (required when is_answerable=false)")
   investigation_strategy string? @description("Detailed explanation of the investigation approach (null when is_answerable=false)")
   queries PlannedQuery[]? @description("SQL queries (null when is_answerable=false)")
 }
 
 // Batch SQL repair types
+class PreviousRepairAttempt {
+  sql string @description("Previously attempted SQL that failed")
+  error_message string @description("The error from this attempt")
+}
+
 class FailedQueryForRepair {
   query_index int @description("1-based index of this query in the batch")
   purpose string @description("What this query was intended to discover")
   sql string @description("The failed SQL query")
   error_message string @description("The error message from execution")
+  previous_attempts PreviousRepairAttempt[] @description("History of previous repair attempts that failed - avoid repeating these patterns")
 }
 
 class BatchSqlRepairItem {

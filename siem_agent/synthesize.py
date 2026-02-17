@@ -11,7 +11,6 @@ from siem_agent.baml_client.types import (
     ExecutedQueryForBAML,
     SynthesizeAndReplanResult,
 )
-from siem_agent.sql_utils import normalize_clickhouse_array_functions
 from siem_agent.tag_processor import process_output_tags
 
 
@@ -126,11 +125,6 @@ def synthesize_and_replan(state: AgentState) -> SynthesizeAndReplanResult:
         state.session_logger.log_error(e, context=f"BAML validation error in SynthesizeAndReplan: {error_details}")
         # Re-raise to crash the program as requested
         raise
-
-    # Normalize array functions in replan queries
-    if parsed.replan and parsed.replan.queries:
-        for query in parsed.replan.queries:
-            query.sql = normalize_clickhouse_array_functions(query.sql)
 
     # Extract prompt for logging
     prompt_full = _extract_prompt_from_request(req)

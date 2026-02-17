@@ -108,6 +108,12 @@ cat "$LOG" | jq -r '.message'
 cat "$LOG" | jq -r 'select(.event_type == "round_start" or .event_type == "round_end" or .event_type == "sql_query" or .event_type == "session_end") | .message'
 ```
 
+### Obtain statistical data on SQL generation errors from all session logs
+
+```bash
+cat logs/* | jq -r 'select(.event_type == "sql_query" and .data.success == false) | .data.error_message' | sort | uniq -c | sort -nr
+```
+
 ## Failure Classification Taxonomy
 
 When analyzing a failure, classify it into one of these categories to guide remediation:

@@ -17,7 +17,6 @@ from siem_agent.clickhouse import ClickHouseClient
 from siem_agent.execute import QueryExecutionResult, execute_investigation_plan
 from siem_agent.language_detect import is_english
 from siem_agent.session_logger import create_session_logger
-from siem_agent.sql_utils import normalize_clickhouse_array_functions
 from siem_agent.synthesize import synthesize_and_replan
 
 
@@ -96,14 +95,14 @@ def generate_investigation_plan(state: AgentState) -> InvestigationPlan:
         # Log detailed error information for post-mortem analysis
         error_context = {
             "is_answerable": False,
-            "unanswerable_reason": parsed.unanswerable_reason,
+            "answerability_rationale": parsed.answerability_rationale,
             "user_question": state.user_question,
             "available_hosts": state.available_hosts,
             "available_rule_tags_count": len(state.available_rule_tags),
             "current_replanning_round": state.current_replanning_round,
             "max_replanning_rounds": state.max_replanning_rounds,
         }
-        error_msg = f"LLM determined the question is unanswerable.\n  Reason: {parsed.unanswerable_reason}\n  User question: {state.user_question}"
+        error_msg = f"LLM determined the question is unanswerable.\n  Reason: {parsed.answerability_rationale}\n  User question: {state.user_question}"
         state.session_logger.log_error(
             ValueError(error_msg),
             context=f"Question deemed unanswerable: {error_context}",
@@ -111,11 +110,6 @@ def generate_investigation_plan(state: AgentState) -> InvestigationPlan:
 
         # Raise exception to stop execution
         raise ValueError(error_msg)
-
-    # Normalize array functions in all generated queries
-    if parsed.queries:  # Add None check for safety
-        for query in parsed.queries:
-            query.sql = normalize_clickhouse_array_functions(query.sql)
 
     # Log the LLM call (normal success case)
     state.session_logger.log_llm_call(
@@ -236,7 +230,7 @@ def run_investigation_loop(state: AgentState, json_mode: bool = False) -> str:
     plan = generate_investigation_plan(state)
 
     if not plan.is_answerable:
-        reason = plan.unanswerable_reason or "Unknown reason"
+        reason = plan.answerability_rationale or "Unknown reason"
         return f"UNANSWERABLE: {reason}"
 
     # Store investigation strategy
@@ -342,7 +336,7 @@ def run_investigation_loop(state: AgentState, json_mode: bool = False) -> str:
                 # Create new InvestigationPlan from replan queries
                 plan = InvestigationPlan(
                     is_answerable=True,
-                    unanswerable_reason=None,
+                    answerability_rationale="Question is answerable (replanning round)",
                     investigation_strategy=result.replan.updated_strategy,
                     queries=result.replan.queries,
                 )

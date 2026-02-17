@@ -106,15 +106,10 @@ def index():
     needs_refresh = has_pending_or_running_jobs(jobs)
     available_hosts_data = get_available_hosts()
 
-    # Add refresh meta tag if needed
-    head_extra = ""
-    if needs_refresh:
-        head_extra = '<meta http-equiv="refresh" content="10">'
-
     return template(
         "index",
         jobs=jobs,
-        head_extra=head_extra,
+        needs_refresh=needs_refresh,
         available_hosts=available_hosts_data.get("hosts", []),
         available_hosts_last_updated=available_hosts_data.get("last_updated"),
         available_hosts_last_error=available_hosts_data.get("last_error"),
