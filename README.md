@@ -40,8 +40,8 @@ Security investigations often generate massive result sets (tens of thousands of
 **Structured Tags for Arithmetic and Fact Citation**
 LLMs struggle with arithmetic (e.g., calculating percentage increases or rate comparisons) because they are token prediction models that learn numerical patterns from training data rather than executing symbolic computation rules. Additionally, LLMs may fabricate or misremember numbers from query results. This agent addresses both issues by externalizing all math and fact citation through inline pseudo-XML tags that the LLM embeds in its output:
 
-- `<fact source="..." val="..." />` — cites a data source and numeric value from query results, preventing number hallucination
-- `<calc formula="..." expr="..." precision="N" />` — declares a mathematical expression to be evaluated externally (e.g., `expr="211 / 712 * 100"`)
+- `<fact source="..." val="..." />`: cites a data source and numeric value from query results, preventing number hallucination
+- `<calc formula="..." expr="..." precision="N" />`: declares a mathematical expression to be evaluated externally (e.g., `expr="211 / 712 * 100"`)
 
 When synthesis requires computing "211 / 712 * 100", the LLM writes `<calc formula="..." expr="211 / 712 * 100" precision="1" />` and the post-processor evaluates it using a safe Python evaluator, returning "29.6" as a verified result. The LLM never performs mental math; it only decides which calculations are needed and declares them as structured tags. This makes both hallucinated numbers and calculation errors detectable and correctable.
 
@@ -49,9 +49,9 @@ When synthesis requires computing "211 / 712 * 100", the LLM writes `<calc formu
 
 LLMs are probabilistic. Even with careful prompting, a model might generate a `DELETE` statement when asked to "clean up the data," or be manipulated into accessing unauthorized tables by adversarial instructions embedded in th input or log data themselves. This agent addresses this by separating responsibilities: the LLM decides *what to query* (intent), while a deterministic SQL parser enforces *how* that query is allowed to execute (safety and correctness). Before any LLM-generated SQL reaches the database, it is parsed into an abstract syntax tree and subjected to two layers of deterministic enforcement:
 
-- **Security boundary enforcement**: Any non-`SELECT` statement is rejected at the parsing layer, regardless of what the LLM generated, and only whitelisted tables are permitted—preventing prompt injection embedded in log data from causing unintended writes or unauthorized access.
+- **Security boundary enforcement**: Any non-SELECT statement is rejected at the parsing layer, regardless of what the LLM generated, and only whitelisted tables are permitted. This prevents prompt injection embedded in log data from causing unintended writes or unauthorized access.
 
-- **Systematic error correction**: Small LLMs reliably produce subtly wrong SQL—wrong function names, mismatched column names, invalid JOIN syntax. AST-level transforms automatically correct these known patterns: the LLM expresses analytical intent; the parser normalizes it into valid SQL.
+- **Systematic error correction**: Small LLMs often produce subtly wrong SQL, including wrong function names, mismatched column names, and invalid JOIN syntax. AST-level transforms automatically correct these known patterns: the LLM expresses analytical intent; the parser normalizes it into valid SQL.
 
 
 **LLM-as-a-Judge for Regression Testing**
@@ -72,7 +72,7 @@ This agent uses [BAML (Basically a Made-up Language)](https://www.boundaryml.com
 
 ## Setup
 - Copy `config.yaml.example` to `config.yaml` and fill in the ClickHouse connection details and credentials.
-- Configure vLLM endpoints in `siem_agent/baml_src/clients.baml` and `test_runner/baml_src/clients.baml` — set `base_url` to your vLLM server address and `model` to the model name you are serving. After editing these files, run `uv run baml-cli generate` to regenerate the BAML client code.
+- Configure vLLM endpoints in `siem_agent/baml_src/clients.baml` and `test_runner/baml_src/clients.baml`: set `base_url` to your vLLM server address and `model` to the model name you are serving. After editing these files, run `uv run baml-cli generate` to regenerate the BAML client code.
 - Ensure Python with `uv` (or your preferred runner) is available; dependencies are managed via `pyproject.toml`.
 
 ## Usage
