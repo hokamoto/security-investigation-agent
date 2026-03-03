@@ -289,6 +289,10 @@ timestamp for each phase, and lists the specific ruleTags triggered during explo
 No additional data is required.
 ```
 
+## Blog
+
+[Teaching a Small AI to Investigate Security Logs (And Everything That Went Wrong Along the Way)](https://www.fab34.com/en/teaching-a-small-ai-to-investigate-security-logs/)
+
 ## Disclaimer and Legal Notices
 
 This is an independent, unofficial, third-party tool.
